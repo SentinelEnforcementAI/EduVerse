@@ -139,8 +139,10 @@ This evaluates every rule against the school's data and raises signals for
 the DSL to review — you'll see the count on the dashboard. Every signal
 carries its full reasoning: which rule fired, the computed numbers against
 their thresholds, and the underlying records. Signals are never actioned
-automatically; confirming, dismissing or escalating is always a human
-decision (build step 7).
+automatically: on each signal the DSL confirms, escalates, or dismisses
+(dismissal requires a note). Every decision is applied atomically, recorded
+in an append-only decision log alongside an audit entry, and can never be
+edited or deleted afterwards — by anyone.
 
 Rules are versioned: the exact definition that produced each signal is
 stored, and the engine refuses to run if a rule's parameters change without

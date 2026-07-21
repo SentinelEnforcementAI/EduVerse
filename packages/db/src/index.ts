@@ -51,3 +51,19 @@ export const systemDb = withRlsContext("app.context", "system");
 
 export type TenantDb = ReturnType<typeof dbForTenant>;
 export type SystemDb = typeof systemDb;
+
+import type { Prisma } from "@prisma/client";
+
+// Atomic multi-statement work under the RLS system context. The per-operation
+// clients above wrap each call in its own transaction; use this when several
+// writes must land together (e.g. a decision: status transition + decision
+// row + audit entry). Callers must verify tenant ownership through a
+// tenant-scoped read first — inside here, RLS is the system context.
+export async function systemTransaction<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.context', 'system', TRUE)`;
+    return fn(tx);
+  });
+}

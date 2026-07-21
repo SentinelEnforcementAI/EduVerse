@@ -146,11 +146,14 @@ describe("signals.byId", () => {
       tenantContext({
         signal: { findUnique },
         auditEvent: { create: auditCreate },
+        signalDecision: { findMany: vi.fn().mockResolvedValue([]) },
+        user: { findMany: vi.fn().mockResolvedValue([]) },
       }),
     );
 
     const result = await caller.signals.byId({ id: "sig_1" });
     expect(result.id).toBe("sig_1");
+    expect(result.decisions).toEqual([]);
 
     expect(auditCreate).toHaveBeenCalledWith(
       expect.objectContaining({

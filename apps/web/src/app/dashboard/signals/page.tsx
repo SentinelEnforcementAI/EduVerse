@@ -12,11 +12,30 @@ import { serverApi } from "@/trpc/server";
 
 export const metadata = { title: "Signals" };
 
-export default async function SignalsPage() {
+const STATUSES = ["OPEN", "CONFIRMED", "DISMISSED", "ESCALATED"] as const;
+type Status = (typeof STATUSES)[number];
+
+const TAB_LABELS: Record<Status, string> = {
+  OPEN: "Open",
+  CONFIRMED: "Confirmed",
+  DISMISSED: "Dismissed",
+  ESCALATED: "Escalated",
+};
+
+export default async function SignalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const requested = (await searchParams).status?.toUpperCase();
+  const status: Status = STATUSES.includes(requested as Status)
+    ? (requested as Status)
+    : "OPEN";
+
   const api = await serverApi();
   let signals;
   try {
-    signals = await api.signals.list({ status: "OPEN" });
+    signals = await api.signals.list({ status });
   } catch (error) {
     if (error instanceof TRPCError && error.code === "FORBIDDEN") {
       return (
@@ -37,7 +56,7 @@ export default async function SignalsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Open signals</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Signals</h1>
         <p className="text-muted-foreground">
           Raised by the rules engine for your school, most severe first. The
           decision on every signal is yours — nothing is actioned
@@ -45,13 +64,30 @@ export default async function SignalsPage() {
         </p>
       </div>
 
+      <nav className="flex gap-1 border-b">
+        {STATUSES.map((tab) => (
+          <Link
+            key={tab}
+            href={`/dashboard/signals${tab === "OPEN" ? "" : `?status=${tab.toLowerCase()}`}`}
+            className={
+              tab === status
+                ? "border-b-2 border-primary px-3 py-2 text-sm font-medium"
+                : "px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+            }
+          >
+            {TAB_LABELS[tab]}
+          </Link>
+        ))}
+      </nav>
+
       {signals.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>No open signals</CardTitle>
+            <CardTitle>No {TAB_LABELS[status].toLowerCase()} signals</CardTitle>
             <CardDescription>
-              When the rules engine raises a signal it will appear here with
-              its full reasoning.
+              {status === "OPEN"
+                ? "When the rules engine raises a signal it will appear here with its full reasoning."
+                : `Signals you ${TAB_LABELS[status].toLowerCase().replace("ed", "")} will appear here.`}
             </CardDescription>
           </CardHeader>
         </Card>
