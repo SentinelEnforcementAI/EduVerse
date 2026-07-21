@@ -90,6 +90,27 @@ model RuleExecution {
   @@map("rule_executions")
 }
 
+// Append-only audit trail: who read or changed what about a child's record,
+// when, and why. Deliberately has NO foreign keys — audit history must
+// survive the deletion of anything it references — and the migration creates
+// no UPDATE or DELETE policies, so under FORCE row-level security not even
+// the system context can rewrite or remove an entry.
+model AuditEvent {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  userId     String?  @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  pupilId    String?  @map("pupil_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@index([pupilId, createdAt])
+  @@map("audit_events")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.
