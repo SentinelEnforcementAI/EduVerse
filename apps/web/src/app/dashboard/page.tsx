@@ -1,5 +1,8 @@
+import Link from "next/link";
+
 import { dbForTenant } from "@sentinel/db";
 
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -85,11 +88,16 @@ export default async function DashboardPage() {
                 No school assigned yet.
               </span>
             ) : (
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold">{openSignals}</span>
-                <span className="text-sm text-muted-foreground">
-                  open signal{openSignals === 1 ? "" : "s"} awaiting review
-                </span>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold">{openSignals}</span>
+                  <span className="text-sm text-muted-foreground">
+                    open signal{openSignals === 1 ? "" : "s"} awaiting review
+                  </span>
+                </div>
+                <Button asChild size="sm" className="self-start">
+                  <Link href="/dashboard/signals">Review signals</Link>
+                </Button>
               </div>
             )}
           </CardContent>

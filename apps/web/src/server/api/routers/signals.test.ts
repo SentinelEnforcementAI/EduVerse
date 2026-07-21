@@ -25,6 +25,14 @@ function contextWith(overrides: Partial<TRPCContext>): TRPCContext {
   };
 }
 
+function tenantContext(tenantDb: unknown): TRPCContext {
+  return contextWith({
+    session: { sessionId: "sess_1", user: tenantUser },
+    tenantId: "tenant_a",
+    tenantDb: tenantDb as TRPCContext["tenantDb"],
+  });
+}
+
 describe("signals.summary", () => {
   it("rejects unauthenticated callers", async () => {
     const caller = createCaller(contextWith({}));
@@ -38,18 +46,121 @@ describe("signals.summary", () => {
       { status: "OPEN", _count: { _all: 7 } },
       { status: "DISMISSED", _count: { _all: 2 } },
     ]);
-    const caller = createCaller(
-      contextWith({
-        session: { sessionId: "sess_1", user: tenantUser },
-        tenantId: "tenant_a",
-        tenantDb: { signal: { groupBy } } as unknown as TRPCContext["tenantDb"],
-      }),
-    );
+    const caller = createCaller(tenantContext({ signal: { groupBy } }));
     await expect(caller.signals.summary()).resolves.toEqual({
       OPEN: 7,
       CONFIRMED: 0,
       DISMISSED: 2,
       ESCALATED: 0,
     });
+  });
+});
+
+const listedSignal = {
+  id: "sig_1",
+  status: "OPEN",
+  severity: 3,
+  title: "Attendance dropped 34 percentage points",
+  updatedAt: new Date("2026-07-20T09:00:00Z"),
+  windowEnd: new Date("2026-07-21T00:00:00Z"),
+  pupilId: "pupil_1",
+  pupil: {
+    id: "pupil_1",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    yearGroup: 9,
+    registrationGroup: "9A",
+  },
+  ruleVersion: { key: "attendance-drop", name: "Attendance drop", version: 1 },
+};
+
+describe("signals.list", () => {
+  it("returns open signals and audits the read", async () => {
+    const findMany = vi.fn().mockResolvedValue([listedSignal]);
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const caller = createCaller(
+      tenantContext({
+        signal: { findMany },
+        auditEvent: { create: auditCreate },
+      }),
+    );
+
+    const result = await caller.signals.list({ status: "OPEN" });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "sig_1",
+      severity: 3,
+      pupil: { firstName: "Ada" },
+      rule: { key: "attendance-drop" },
+    });
+
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "signals.listed",
+          userId: "user_1",
+          tenantId: "tenant_a",
+        }),
+      }),
+    );
+  });
+});
+
+describe("signals.byId", () => {
+  it("returns NOT_FOUND for unknown ids without writing audit", async () => {
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const auditCreate = vi.fn();
+    const caller = createCaller(
+      tenantContext({
+        signal: { findUnique },
+        auditEvent: { create: auditCreate },
+      }),
+    );
+    await expect(caller.signals.byId({ id: "missing" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(auditCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns the full signal and audits the pupil-record read", async () => {
+    const detail = {
+      ...listedSignal,
+      reasoning: { summary: "s", metrics: {}, dataPoints: [] },
+      pupil: { ...listedSignal.pupil, upn: "SW-DOW-0001" },
+      ruleVersion: {
+        id: "rv_1",
+        key: "attendance-drop",
+        name: "Attendance drop",
+        version: 1,
+        description: "d",
+        params: {},
+        active: true,
+        tenantId: null,
+        createdAt: new Date(),
+      },
+      execution: { id: "exec_1", startedAt: new Date(), asOf: new Date() },
+    };
+    const findUnique = vi.fn().mockResolvedValue(detail);
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const caller = createCaller(
+      tenantContext({
+        signal: { findUnique },
+        auditEvent: { create: auditCreate },
+      }),
+    );
+
+    const result = await caller.signals.byId({ id: "sig_1" });
+    expect(result.id).toBe("sig_1");
+
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "signal.viewed",
+          entityId: "sig_1",
+          pupilId: "pupil_1",
+          userId: "user_1",
+        }),
+      }),
+    );
   });
 });
