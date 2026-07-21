@@ -89,6 +89,10 @@ dashboard.
   `docker compose ps` and wait for "healthy".
 - **Port 3000 or 5432 already in use** — something else on your machine is
   using it; quit that app or ask for help changing the port.
+- **Database errors after pulling new changes** — the database setup may have
+  changed. Reset it with `docker compose down -v` (deletes local dev data,
+  which is only ever synthetic) then `docker compose up -d` and
+  `pnpm db:migrate`.
 
 ## Checks (what CI runs)
 

@@ -57,6 +57,21 @@ afterAll(async () => {
   await systemDb.tenant.deleteMany({ where: { id: { in: [tenantAId, tenantBId] } } });
 });
 
+describe("database role", () => {
+  it("cannot bypass RLS (superuser connections would disable isolation silently)", async () => {
+    const raw = new PrismaClient();
+    try {
+      const [role] = await raw.$queryRaw<
+        { rolsuper: boolean; rolbypassrls: boolean }[]
+      >`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`;
+      expect(role.rolsuper).toBe(false);
+      expect(role.rolbypassrls).toBe(false);
+    } finally {
+      await raw.$disconnect();
+    }
+  });
+});
+
 describe("system context", () => {
   it("sees users across tenants (needed for auth flows)", async () => {
     const users = await systemDb.user.findMany({

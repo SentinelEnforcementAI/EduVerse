@@ -16,18 +16,24 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: sentinel
-          POSTGRES_PASSWORD: sentinel_dev_password
-          POSTGRES_DB: sentinel_watch
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_dev_password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U sentinel -d sentinel_watch"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+
+      # The app role must NOT be a superuser — superusers bypass row-level
+      # security, which would make the RLS tests meaningless.
+      - name: Create non-superuser application role
+        run: psql -h localhost -U postgres -f docker/postgres-init.sql
+        env:
+          PGPASSWORD: postgres_dev_password
 
       - uses: pnpm/action-setup@v4
 
