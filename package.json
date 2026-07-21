@@ -1,0 +1,20 @@
+{
+  "name": "sentinel-watch",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "db:generate": "pnpm --filter @sentinel/db db:generate",
+    "db:migrate": "pnpm --filter @sentinel/db db:migrate",
+    "db:deploy": "pnpm --filter @sentinel/db db:deploy",
+    "db:studio": "pnpm --filter @sentinel/db db:studio"
+  }
+}
