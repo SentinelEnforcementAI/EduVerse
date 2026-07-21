@@ -68,6 +68,19 @@ pnpm db:migrate
 name only if the schema has changed since the last migration — otherwise it
 just applies what's there.
 
+Then load the synthetic dataset (two schools, ~800 pupils each, 12 months of
+attendance, behaviour, and attainment):
+
+```bash
+pnpm db:seed
+```
+
+This takes a minute or two. It's safe to re-run — it wipes and regenerates
+the synthetic data each time. Every pupil is invented; the dataset includes
+deliberately embedded risk patterns so the risk engine has something real to
+find. The seed prints a summary, and writes which pupils carry which pattern
+to `packages/db/prisma/seed-manifest.json` (not committed).
+
 ### 5. Run the app
 
 ```bash
@@ -76,11 +89,11 @@ pnpm dev
 
 Open <http://localhost:3000>. You should see the Sentinel Watch landing page.
 
-**Signing in locally:** click "Sign in", enter any email address, and press
-the button. No real email is sent in development — instead, the sign-in link
-is printed in the terminal where `pnpm dev` is running. Look for a block that
-says "magic link", copy the link into your browser, and you'll land on the
-dashboard.
+**Signing in locally:** click "Sign in" and use one of the seeded DSL
+accounts — `dsl@downlands.example` or `dsl@patcham.example`. No real email is
+sent in development — instead, the sign-in link is printed in the terminal
+where `pnpm dev` is running. Look for a block that says "magic link", copy
+the link into your browser, and you'll land on that school's dashboard.
 
 ### Something not working?
 

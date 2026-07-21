@@ -1,3 +1,5 @@
+import { dbForTenant } from "@sentinel/db";
+
 import {
   Card,
   CardContent,
@@ -11,6 +13,9 @@ import { SystemStatus } from "./system-status";
 
 export default async function DashboardPage() {
   const session = await getAuthSession();
+  const pupilCount = session?.user.tenantId
+    ? await dbForTenant(session.user.tenantId).pupil.count()
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -24,6 +29,24 @@ export default async function DashboardPage() {
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Pupils on roll</CardTitle>
+            <CardDescription>
+              Synthetic data for development — no real pupil data until DPAs
+              are signed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {pupilCount === null ? (
+              <span className="text-sm text-muted-foreground">
+                No school assigned yet.
+              </span>
+            ) : (
+              <span className="text-3xl font-semibold">{pupilCount}</span>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Signals</CardTitle>

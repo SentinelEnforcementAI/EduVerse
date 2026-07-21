@@ -20,3 +20,4 @@ coverage/
 # Misc
 .DS_Store
 *.log
+**/prisma/seed-manifest.json
