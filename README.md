@@ -150,6 +150,21 @@ a version bump. Re-running the engine is always safe — open signals are
 refreshed, not duplicated, and signals a DSL has already actioned are never
 touched.
 
+## AI summaries (advisory only)
+
+On a signal a DSL has confirmed, Sentinel Watch can generate a short
+AI-written summary of the pattern — via Claude on AWS Bedrock in the London
+region (hardcoded; UK data residency is structural). Before anything is sent,
+the data is pseudonymised: no names, no UPNs, no free-text notes — only the
+computed numbers behind the signal, and a fail-closed check blocks the call
+if an identifying value slips through. Summaries are labelled AI-generated in
+the database and on screen, are permanent once written, and are strictly
+advisory: nothing in the system reads them to make a decision. Every call is
+logged to the audit trail with the exact prompt version and model used.
+
+To enable it locally, put AWS credentials in `.env` (see `.env.example`).
+Everything else works without them.
+
 ## Checks (what CI runs)
 
 ```bash

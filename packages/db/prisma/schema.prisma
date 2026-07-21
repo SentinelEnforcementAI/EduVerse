@@ -137,6 +137,29 @@ model SignalDecision {
   @@map("signal_decisions")
 }
 
+// An AI-generated advisory narrative for a confirmed signal. Labelled as
+// AI-generated in the schema itself (ai_generated), with the exact prompt
+// version and model that produced it. Append-only like audit_events and
+// signal_decisions: no foreign keys, no UPDATE/DELETE policies. Content is
+// generated from pseudonymised data only and is strictly advisory — nothing
+// reads a narrative to make a decision.
+model SignalNarrative {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  signalId      String   @map("signal_id")
+  pupilId       String   @map("pupil_id")
+  content       String
+  aiGenerated   Boolean  @default(true) @map("ai_generated")
+  promptKey     String   @map("prompt_key")
+  promptVersion Int      @map("prompt_version")
+  modelId       String   @map("model_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("signal_narratives")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.

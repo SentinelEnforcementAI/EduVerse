@@ -14,6 +14,7 @@ import {
 import { serverApi } from "@/trpc/server";
 
 import { DecisionPanel } from "./decision-panel";
+import { GenerateNarrativeButton } from "./narrative-panel";
 
 export const metadata = { title: "Signal detail" };
 
@@ -139,6 +140,47 @@ export default async function SignalDetailPage({
 
       {signal.status === "OPEN" ? (
         <DecisionPanel signalId={signal.id} />
+      ) : null}
+
+      {signal.status === "CONFIRMED" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              AI summary
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                AI-generated · advisory only
+              </span>
+            </CardTitle>
+            <CardDescription>
+              Written by Claude (AWS Bedrock, London region) from
+              pseudonymised data — no names or identifying details are sent.
+              It informs your judgement; it never acts on the signal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {signal.narrative ? (
+              <div className="flex flex-col gap-2">
+                <p className="whitespace-pre-wrap text-sm">
+                  {signal.narrative.content}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Generated{" "}
+                  {signal.narrative.createdAt.toLocaleString("en-GB")} · model{" "}
+                  {signal.narrative.modelId} · prompt{" "}
+                  {signal.narrative.promptKey} v{signal.narrative.promptVersion}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No summary generated yet.
+              </p>
+            )}
+            <GenerateNarrativeButton
+              signalId={signal.id}
+              hasNarrative={signal.narrative !== null}
+            />
+          </CardContent>
+        </Card>
       ) : null}
 
       {signal.decisions.length > 0 ? (

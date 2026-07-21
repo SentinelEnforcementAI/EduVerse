@@ -147,6 +147,7 @@ describe("signals.byId", () => {
         signal: { findUnique },
         auditEvent: { create: auditCreate },
         signalDecision: { findMany: vi.fn().mockResolvedValue([]) },
+        signalNarrative: { findFirst: vi.fn().mockResolvedValue(null) },
         user: { findMany: vi.fn().mockResolvedValue([]) },
       }),
     );
@@ -154,6 +155,7 @@ describe("signals.byId", () => {
     const result = await caller.signals.byId({ id: "sig_1" });
     expect(result.id).toBe("sig_1");
     expect(result.decisions).toEqual([]);
+    expect(result.narrative).toBeNull();
 
     expect(auditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
