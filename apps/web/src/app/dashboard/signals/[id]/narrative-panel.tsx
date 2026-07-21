@@ -33,7 +33,9 @@ export function GenerateNarrativeButton({
             : "Generate AI summary"}
       </Button>
       {generate.error ? (
-        <p className="text-sm text-destructive">{generate.error.message}</p>
+        <p className="border-l-2 border-forest bg-muted px-3 py-2 text-sm font-bold">
+          {generate.error.message}
+        </p>
       ) : null}
     </div>
   );

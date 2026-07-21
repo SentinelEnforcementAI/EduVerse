@@ -8,8 +8,15 @@ import { getAuthSession } from "@/server/auth/session";
 
 export const metadata = { title: "Dashboard" };
 
-// Protected area: every route under /dashboard requires a valid session,
-// enforced server-side before anything renders.
+const NAV = [
+  { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/signals", label: "Signals" },
+  { href: "/dashboard/audit", label: "Audit log" },
+];
+
+// Protected area. DESIGN.md layout: left sidebar in forest-deep for
+// navigation and identity; the content pane stays cream for legibility.
+// No top-and-side double navigation.
 export default async function DashboardLayout({
   children,
 }: {
@@ -20,8 +27,6 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
-  // Fetched through the tenant-scoped client: RLS guarantees this can only
-  // ever be the signed-in user's own school.
   const tenant = session.user.tenantId
     ? await dbForTenant(session.user.tenantId).tenant.findUnique({
         where: { id: session.user.tenantId },
@@ -29,40 +34,44 @@ export default async function DashboardLayout({
     : null;
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="border-b">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-baseline gap-4">
-            <span className="font-semibold">Sentinel Watch</span>
-            <span className="text-sm text-muted-foreground">
-              {tenant ? tenant.name : "No school assigned yet"}
-            </span>
-            <nav className="flex items-baseline gap-3 text-sm">
-              <Link href="/dashboard" className="hover:underline">
-                Overview
-              </Link>
-              <Link href="/dashboard/signals" className="hover:underline">
-                Signals
-              </Link>
-              <Link href="/dashboard/audit" className="hover:underline">
-                Audit log
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {session.user.email}
-            </span>
-            <form action="/api/auth/sign-out" method="post">
-              <Button type="submit" variant="outline" size="sm">
-                Sign out
-              </Button>
-            </form>
+    <div className="flex min-h-screen">
+      <aside className="flex w-60 shrink-0 flex-col bg-forest-deep text-cream">
+        <div className="px-6 pb-6 pt-8">
+          <div className="font-serif text-xl font-bold">Sentinel Watch</div>
+          <div className="mt-1 text-xs text-cream/70">
+            {tenant ? tenant.name : "No school assigned yet"}
           </div>
         </div>
-      </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
-        {children}
+        <nav className="flex flex-col gap-1 px-3" aria-label="Main">
+          {NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="rounded-md px-3 py-3 text-sm text-cream/90 transition-colors duration-150 hover:bg-forest hover:text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cream/80"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="mt-auto flex flex-col gap-3 border-t border-forest px-6 py-5">
+          <span className="break-all text-xs text-cream/70">
+            {session.user.email}
+          </span>
+          <form action="/api/auth/sign-out" method="post">
+            <Button
+              type="submit"
+              size="sm"
+              className="w-full border border-forest bg-transparent text-cream hover:bg-forest"
+            >
+              Sign out
+            </Button>
+          </form>
+        </div>
+      </aside>
+      <main className="min-w-0 flex-1">
+        <div className="mx-auto w-full max-w-[1200px] px-8 py-8">
+          {children}
+        </div>
       </main>
     </div>
   );

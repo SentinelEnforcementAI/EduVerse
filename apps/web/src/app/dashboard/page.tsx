@@ -46,10 +46,10 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="font-serif text-2xl font-bold tracking-tight">
           Welcome{session?.user.name ? `, ${session.user.name}` : ""}
         </h1>
-        <p className="text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           Signals for your school will appear here once the risk engine is
           live.
         </p>
@@ -69,7 +69,9 @@ export default async function DashboardPage() {
                 No school assigned yet.
               </span>
             ) : (
-              <span className="text-3xl font-semibold">{pupilCount}</span>
+              <span className="text-2xl font-bold tabular-nums">
+                {pupilCount}
+              </span>
             )}
           </CardContent>
         </Card>
@@ -90,7 +92,9 @@ export default async function DashboardPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold">{openSignals}</span>
+                  <span className="text-2xl font-bold tabular-nums">
+                    {openSignals}
+                  </span>
                   <span className="text-sm text-muted-foreground">
                     open signal{openSignals === 1 ? "" : "s"} awaiting review
                   </span>
@@ -115,14 +119,16 @@ export default async function DashboardPage() {
               {latestSyncByType.map(({ type, run }) => (
                 <li key={type} className="flex items-center justify-between">
                   <span>{SYNC_TYPE_LABELS[type]}</span>
+                  {/* Success reads as forest, never green; failure carries
+                      weight through bold text, never red (DESIGN.md). */}
                   {run ? (
                     <span
                       className={
                         run.status === "FAILED"
-                          ? "text-destructive"
+                          ? "font-bold tabular-nums"
                           : run.status === "SUCCEEDED"
-                            ? "text-green-700 dark:text-green-400"
-                            : "text-muted-foreground"
+                            ? "tabular-nums text-forest"
+                            : "tabular-nums text-muted-foreground"
                       }
                     >
                       {run.status.toLowerCase()}

@@ -29,7 +29,7 @@ export function SignInForm() {
           <CardTitle>Check your email</CardTitle>
           <CardDescription>
             If your address is registered, a sign-in link is on its way to{" "}
-            <span className="font-medium text-foreground">{email}</span>. The
+            <span className="font-bold text-foreground">{email}</span>. The
             link works once and expires in 15 minutes.
           </CardDescription>
         </CardHeader>
@@ -59,7 +59,7 @@ export function SignInForm() {
           }}
         >
           {linkError ? (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p className="rounded-md border-l-2 border-forest bg-muted px-3 py-2 text-sm">
               That sign-in link is invalid or has expired. Request a new one
               below.
             </p>
@@ -77,7 +77,7 @@ export function SignInForm() {
             />
           </div>
           {requestMagicLink.error ? (
-            <p className="text-sm text-destructive">
+            <p className="text-sm font-bold">
               {requestMagicLink.error.data?.zodError?.fieldErrors.email?.[0] ??
                 "Something went wrong. Please try again."}
             </p>
