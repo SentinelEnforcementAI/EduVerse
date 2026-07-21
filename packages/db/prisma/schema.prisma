@@ -35,8 +35,97 @@ model Tenant {
   behaviourIncidents BehaviourIncident[]
   attainmentRecords  AttainmentRecord[]
   syncRuns           SyncRun[]
+  ruleExecutions     RuleExecution[]
+  signals            Signal[]
 
   @@map("tenants")
+}
+
+// A versioned rule definition. Rules are implemented in code
+// (packages/rules); this table records each (key, version) with its exact
+// parameters so every signal points at the precise definition that produced
+// it. The engine refuses to run if code params drift from the stored version
+// without a version bump — versioning is enforced, not conventional.
+// tenant_id is NULL for platform-wide definitions; per-school tuning can
+// populate it later without schema change.
+model RuleVersion {
+  id          String   @id @default(cuid())
+  tenantId    String?  @map("tenant_id")
+  key         String
+  version     Int
+  name        String
+  description String
+  params      Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  signals Signal[]
+
+  @@unique([key, version])
+  @@map("rule_versions")
+}
+
+enum RuleExecutionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// Execution log: one row per engine run per tenant. Stats record which rule
+// versions ran and what they produced — the audit trail for the engine.
+model RuleExecution {
+  id         String              @id @default(cuid())
+  tenantId   String              @map("tenant_id")
+  status     RuleExecutionStatus @default(RUNNING)
+  asOf       DateTime            @map("as_of")
+  stats      Json?
+  error      String?
+  startedAt  DateTime            @default(now()) @map("started_at")
+  finishedAt DateTime?           @map("finished_at")
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  signals Signal[]
+
+  @@index([tenantId, startedAt])
+  @@map("rule_executions")
+}
+
+// The lifecycle is human-driven by design: the engine only ever creates or
+// refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
+// (build step 7) — nothing in the system auto-actions a signal.
+enum SignalStatus {
+  OPEN
+  CONFIRMED
+  DISMISSED
+  ESCALATED
+}
+
+// A signal raised by the rules engine about one pupil. reasoning is the
+// explainability contract: summary, computed metrics vs thresholds, and the
+// underlying data points — no unexplained scores.
+model Signal {
+  id            String       @id @default(cuid())
+  tenantId      String       @map("tenant_id")
+  pupilId       String       @map("pupil_id")
+  ruleVersionId String       @map("rule_version_id")
+  executionId   String       @map("execution_id")
+  status        SignalStatus @default(OPEN)
+  severity      Int
+  title         String
+  reasoning     Json
+  windowStart   DateTime     @map("window_start") @db.Date
+  windowEnd     DateTime     @map("window_end") @db.Date
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  pupil       Pupil         @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+  ruleVersion RuleVersion   @relation(fields: [ruleVersionId], references: [id])
+  execution   RuleExecution @relation(fields: [executionId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([pupilId, status])
+  @@map("signals")
 }
 
 enum SyncType {
@@ -95,6 +184,7 @@ model Pupil {
   attendanceRecords  AttendanceRecord[]
   behaviourIncidents BehaviourIncident[]
   attainmentRecords  AttainmentRecord[]
+  signals            Signal[]
 
   @@unique([tenantId, wondeId])
   @@index([tenantId])
