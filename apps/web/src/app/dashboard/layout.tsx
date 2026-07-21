@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { dbForTenant } from "@sentinel/db";
+
 import { Button } from "@/components/ui/button";
 import { getAuthSession } from "@/server/auth/session";
 
@@ -17,11 +19,24 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
+  // Fetched through the tenant-scoped client: RLS guarantees this can only
+  // ever be the signed-in user's own school.
+  const tenant = session.user.tenantId
+    ? await dbForTenant(session.user.tenantId).tenant.findUnique({
+        where: { id: session.user.tenantId },
+      })
+    : null;
+
   return (
     <div className="flex flex-1 flex-col">
       <header className="border-b">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4">
-          <span className="font-semibold">Sentinel Watch</span>
+          <div className="flex items-baseline gap-3">
+            <span className="font-semibold">Sentinel Watch</span>
+            <span className="text-sm text-muted-foreground">
+              {tenant ? tenant.name : "No school assigned yet"}
+            </span>
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
               {session.user.email}

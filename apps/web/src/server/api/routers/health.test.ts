@@ -7,6 +7,8 @@ function publicContext(): TRPCContext {
   return {
     db: {} as TRPCContext["db"],
     session: null,
+    tenantId: null,
+    tenantDb: null,
     headers: new Headers(),
   };
 }

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@sentinel/db";
+import type { SystemDb } from "@sentinel/db";
 
 import { env } from "@/env";
 import { sendMagicLinkEmail } from "@/server/auth/email";
@@ -21,7 +21,7 @@ export function normaliseEmail(email: string): string {
 // (DSLs are provisioned, never self-served) — swap the upsert for a lookup
 // that declines unknown addresses.
 export async function requestMagicLink(
-  db: PrismaClient,
+  db: SystemDb,
   rawEmail: string,
 ): Promise<void> {
   const email = normaliseEmail(rawEmail);
@@ -54,7 +54,7 @@ export type ConsumeResult =
 
 // Verifies a magic link token and consumes it (single use).
 export async function consumeMagicLink(
-  db: PrismaClient,
+  db: SystemDb,
   rawToken: string,
 ): Promise<ConsumeResult> {
   const record = await db.magicLinkToken.findUnique({
