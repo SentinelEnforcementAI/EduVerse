@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment — secrets live in .env only, never committed
+.env
+.env.*
+!.env.example
+
+# Next.js
+.next/
+out/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test output
+coverage/
+
+# Misc
+.DS_Store
+*.log

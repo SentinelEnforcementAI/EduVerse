@@ -1,0 +1,76 @@
+// Sentinel Watch — database schema
+//
+// Every table carries tenant_id (school/trust). In build step 1 (auth shell)
+// tenant_id is nullable because tenancy + RLS land as build step 2, which will
+// tighten these columns and add DB-level RLS policies with tests. Do not build
+// features on top of nullable tenant_id — treat step 2 as the enforcement point.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A user of the platform (DSL, pastoral staff, MAT-level user).
+// Auth is email magic link for MVP. The schema is deliberately provider-agnostic
+// (no password column, no provider-specific columns) so WorkOS / school SSO can
+// replace magic links later without a schema change: an SSO provider only needs
+// to resolve to a User row by email.
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  // CTO-DECISION: user roles (DSL / deputy / MAT-level / admin) and how they map
+  // to permissions. Simplest working version: no role column yet; every signed-in
+  // user is treated as a DSL for the design-partner MVP.
+  // CTO-DECISION: tenant membership model (single school vs MAT-level users who
+  // span schools). Nullable single tenant_id is the simplest working version;
+  // build step 2 (tenancy + RLS) formalises this.
+  tenantId  String?  @map("tenant_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  magicLinkTokens MagicLinkToken[]
+  sessions        Session[]
+
+  @@map("users")
+}
+
+// One-time magic link tokens. Only a SHA-256 hash of the token is stored;
+// the raw token appears only in the emailed link. Tokens are single-use
+// (consumed_at) and short-lived (expires_at).
+model MagicLinkToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique @map("token_hash")
+  userId     String    @map("user_id")
+  tenantId   String?   @map("tenant_id")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("magic_link_tokens")
+}
+
+// Server-side sessions. The cookie holds a random token; only its SHA-256 hash
+// is stored here. Revocation is a soft operation (revoked_at) so sign-outs
+// remain visible to the audit trail (full audit logging lands with build step 7).
+model Session {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id")
+  tenantId  String?   @map("tenant_id")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
