@@ -27,9 +27,110 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users User[]
+  users              User[]
+  pupils             Pupil[]
+  attendanceRecords  AttendanceRecord[]
+  behaviourIncidents BehaviourIncident[]
+  attainmentRecords  AttainmentRecord[]
 
   @@map("tenants")
+}
+
+// A pupil on a school's roll. Pupil data always belongs to exactly one
+// tenant — tenant_id is NOT NULL here, unlike platform users.
+// Development data is synthetic only (see prisma/seed.ts) until DPAs are
+// signed; wonde source-id mapping columns arrive with build step 4.
+model Pupil {
+  id                String   @id @default(cuid())
+  tenantId          String   @map("tenant_id")
+  // Synthetic stand-in for the Unique Pupil Number format.
+  upn               String   @unique
+  firstName         String   @map("first_name")
+  lastName          String   @map("last_name")
+  yearGroup         Int      @map("year_group")
+  registrationGroup String   @map("registration_group")
+  dateOfBirth       DateTime @map("date_of_birth")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  attendanceRecords  AttendanceRecord[]
+  behaviourIncidents BehaviourIncident[]
+  attainmentRecords  AttainmentRecord[]
+
+  @@index([tenantId])
+  @@index([tenantId, yearGroup])
+  @@map("pupils")
+}
+
+enum AttendanceSession {
+  AM
+  PM
+}
+
+// One row per pupil per school session (AM/PM), UK-register style.
+// Codes are a working subset of the DfE register codes:
+//   "/" present  "L" late  "I" illness (authorised)  "M" medical (authorised)
+//   "C" other authorised  "O" unauthorised  "N" no reason yet
+// CTO-DECISION: full DfE code list and school-calendar modelling (term dates,
+// holidays). Weekdays-only is the simplest working version for the MVP.
+model AttendanceRecord {
+  id         String            @id @default(cuid())
+  tenantId   String            @map("tenant_id")
+  pupilId    String            @map("pupil_id")
+  date       DateTime          @db.Date
+  session    AttendanceSession
+  code       String
+  present    Boolean
+  authorised Boolean
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  pupil  Pupil  @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+
+  @@unique([pupilId, date, session])
+  @@index([tenantId, date])
+  @@map("attendance_records")
+}
+
+// A recorded behaviour incident. Severity 1 (low) to 3 (serious).
+model BehaviourIncident {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  pupilId     String   @map("pupil_id")
+  date        DateTime @db.Date
+  category    String
+  severity    Int
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  pupil  Pupil  @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, date])
+  @@index([pupilId, date])
+  @@map("behaviour_incidents")
+}
+
+// A termly assessment result. Score is a standardised 0–100 scale.
+// CTO-DECISION: real attainment modelling (key stages, subject grading
+// schemes, teacher assessments vs tests). A flat standardised score is the
+// simplest working version the rules engine can detect declines against.
+model AttainmentRecord {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  pupilId    String   @map("pupil_id")
+  subject    String
+  assessedAt DateTime @map("assessed_at") @db.Date
+  score      Int
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  pupil  Pupil  @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+
+  @@unique([pupilId, subject, assessedAt])
+  @@index([tenantId, assessedAt])
+  @@map("attainment_records")
 }
 
 // A user of the platform (DSL, pastoral staff, MAT-level user).
