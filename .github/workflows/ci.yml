@@ -12,6 +12,7 @@ jobs:
     env:
       # RLS tests run against this throwaway service database.
       DATABASE_URL: postgresql://sentinel:sentinel_dev_password@localhost:5432/sentinel_watch
+      REDIS_URL: redis://localhost:6379
     services:
       postgres:
         image: postgres:16-alpine
@@ -22,6 +23,15 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10

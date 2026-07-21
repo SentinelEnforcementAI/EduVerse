@@ -1,5 +1,6 @@
 import { authRouter } from "@/server/api/routers/auth";
 import { healthRouter } from "@/server/api/routers/health";
+import { syncRouter } from "@/server/api/routers/sync";
 import { tenantRouter } from "@/server/api/routers/tenant";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
@@ -7,6 +8,7 @@ export const appRouter = createTRPCRouter({
   health: healthRouter,
   auth: authRouter,
   tenant: tenantRouter,
+  sync: syncRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -12,6 +12,7 @@ Read [CLAUDE.md](./CLAUDE.md) for the principles, stack, and build order.
 ```
 apps/web       — the web app (Next.js App Router, tRPC, Tailwind, shadcn/ui)
 packages/db    — database schema and client (Prisma → PostgreSQL)
+packages/sync  — Wonde ingestion: API client, sync jobs, Redis queue worker
 docker-compose.yml — local Postgres + Redis
 ```
 
@@ -106,6 +107,24 @@ the link into your browser, and you'll land on that school's dashboard.
   changed. Reset it with `docker compose down -v` (deletes local dev data,
   which is only ever synthetic) then `docker compose up -d` and
   `pnpm db:migrate`.
+
+## Syncing from Wonde (sandbox)
+
+Sentinel Watch reads school data through [Wonde](https://wonde.com). To try
+it against Wonde's sandbox:
+
+1. Register at <https://wonde.com/developers> — you get a test school and an
+   API key.
+2. Put the key and the test school's id in `.env` (`WONDE_API_KEY`,
+   `WONDE_SCHOOL_ID`). Never commit them.
+3. Start the sync worker in one terminal: `pnpm worker`
+4. Enqueue a full sync in another: `pnpm sync --tenant downlands --type all`
+
+The dashboard's "Data sync" card shows each job's outcome. Syncs are
+idempotent — running them again is always safe. Sentinel Watch only ever
+reads from Wonde; it never writes back to the school's MIS.
+
+The real Downlands and Patcham connections happen only after signed DPAs.
 
 ## Checks (what CI runs)
 

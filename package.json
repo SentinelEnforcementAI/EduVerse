@@ -16,6 +16,8 @@
     "db:migrate": "pnpm --filter @sentinel/db db:migrate",
     "db:deploy": "pnpm --filter @sentinel/db db:deploy",
     "db:studio": "pnpm --filter @sentinel/db db:studio",
-    "db:seed": "pnpm --filter @sentinel/db db:seed"
+    "db:seed": "pnpm --filter @sentinel/db db:seed",
+    "worker": "pnpm --filter @sentinel/sync worker",
+    "sync": "pnpm --filter @sentinel/sync trigger"
   }
 }
