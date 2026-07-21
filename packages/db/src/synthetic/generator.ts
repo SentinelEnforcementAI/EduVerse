@@ -223,7 +223,9 @@ function absenceProfile(
         recent: base,
         recentDays: 0,
         habitualWeekday: 1 + Math.floor(rng() * 5),
-        habitualRate: 0.7,
+        // High enough that the pattern is visible in any 12-week window,
+        // matching the "misses every Monday" archetype this pattern embeds.
+        habitualRate: 0.85,
       };
     default:
       return {

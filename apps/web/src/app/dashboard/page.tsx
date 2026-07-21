@@ -24,6 +24,9 @@ export default async function DashboardPage() {
     ? dbForTenant(session.user.tenantId)
     : null;
   const pupilCount = tenantDb ? await tenantDb.pupil.count() : null;
+  const openSignals = tenantDb
+    ? await tenantDb.signal.count({ where: { status: "OPEN" } })
+    : null;
   const syncRuns = tenantDb
     ? await tenantDb.syncRun.findMany({
         orderBy: { queuedAt: "desc" },
@@ -71,12 +74,24 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Signals</CardTitle>
             <CardDescription>
-              Flagged pupils and their reasoning arrive with build steps 5–6.
-              Nothing is actioned without a DSL&apos;s decision.
+              Raised by the rules engine, each with its full reasoning. The
+              detail view arrives with build step 6 — and nothing is actioned
+              without a DSL&apos;s decision.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            No signals yet.
+          <CardContent>
+            {openSignals === null ? (
+              <span className="text-sm text-muted-foreground">
+                No school assigned yet.
+              </span>
+            ) : (
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-semibold">{openSignals}</span>
+                <span className="text-sm text-muted-foreground">
+                  open signal{openSignals === 1 ? "" : "s"} awaiting review
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card>

@@ -13,6 +13,7 @@ Read [CLAUDE.md](./CLAUDE.md) for the principles, stack, and build order.
 apps/web       — the web app (Next.js App Router, tRPC, Tailwind, shadcn/ui)
 packages/db    — database schema and client (Prisma → PostgreSQL)
 packages/sync  — Wonde ingestion: API client, sync jobs, Redis queue worker
+packages/rules — the risk engine: versioned rules, execution log, signals
 docker-compose.yml — local Postgres + Redis
 ```
 
@@ -125,6 +126,27 @@ idempotent — running them again is always safe. Sentinel Watch only ever
 reads from Wonde; it never writes back to the school's MIS.
 
 The real Downlands and Patcham connections happen only after signed DPAs.
+
+## Running the risk engine
+
+With the synthetic data seeded:
+
+```bash
+pnpm rules --tenant downlands
+```
+
+This evaluates every rule against the school's data and raises signals for
+the DSL to review — you'll see the count on the dashboard. Every signal
+carries its full reasoning: which rule fired, the computed numbers against
+their thresholds, and the underlying records. Signals are never actioned
+automatically; confirming, dismissing or escalating is always a human
+decision (build step 7).
+
+Rules are versioned: the exact definition that produced each signal is
+stored, and the engine refuses to run if a rule's parameters change without
+a version bump. Re-running the engine is always safe — open signals are
+refreshed, not duplicated, and signals a DSL has already actioned are never
+touched.
 
 ## Checks (what CI runs)
 

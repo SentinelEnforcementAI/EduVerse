@@ -18,6 +18,7 @@
     "db:studio": "pnpm --filter @sentinel/db db:studio",
     "db:seed": "pnpm --filter @sentinel/db db:seed",
     "worker": "pnpm --filter @sentinel/sync worker",
-    "sync": "pnpm --filter @sentinel/sync trigger"
+    "sync": "pnpm --filter @sentinel/sync trigger",
+    "rules": "pnpm --filter @sentinel/rules run-rules"
   }
 }
