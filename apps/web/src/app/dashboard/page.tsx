@@ -11,11 +11,31 @@ import { getAuthSession } from "@/server/auth/session";
 
 import { SystemStatus } from "./system-status";
 
+const SYNC_TYPE_LABELS = {
+  STUDENTS: "Pupils",
+  ATTENDANCE: "Attendance",
+  BEHAVIOUR: "Behaviour",
+  ATTAINMENT: "Attainment",
+} as const;
+
 export default async function DashboardPage() {
   const session = await getAuthSession();
-  const pupilCount = session?.user.tenantId
-    ? await dbForTenant(session.user.tenantId).pupil.count()
+  const tenantDb = session?.user.tenantId
+    ? dbForTenant(session.user.tenantId)
     : null;
+  const pupilCount = tenantDb ? await tenantDb.pupil.count() : null;
+  const syncRuns = tenantDb
+    ? await tenantDb.syncRun.findMany({
+        orderBy: { queuedAt: "desc" },
+        take: 50,
+      })
+    : [];
+  const latestSyncByType = (
+    Object.keys(SYNC_TYPE_LABELS) as (keyof typeof SYNC_TYPE_LABELS)[]
+  ).map((type) => ({
+    type,
+    run: syncRuns.find((run) => run.type === type) ?? null,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -57,6 +77,42 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             No signals yet.
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Data sync</CardTitle>
+            <CardDescription>
+              Ingestion from the school&apos;s MIS via Wonde (sandbox first).
+              Read-only — Sentinel Watch never writes back.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2 text-sm">
+              {latestSyncByType.map(({ type, run }) => (
+                <li key={type} className="flex items-center justify-between">
+                  <span>{SYNC_TYPE_LABELS[type]}</span>
+                  {run ? (
+                    <span
+                      className={
+                        run.status === "FAILED"
+                          ? "text-destructive"
+                          : run.status === "SUCCEEDED"
+                            ? "text-green-700 dark:text-green-400"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {run.status.toLowerCase()}
+                      {run.finishedAt
+                        ? ` · ${run.finishedAt.toLocaleDateString("en-GB")}`
+                        : ""}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">never synced</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
         <SystemStatus />

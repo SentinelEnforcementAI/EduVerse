@@ -24,6 +24,8 @@ model Tenant {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  // Wonde school identifier once the tenant is linked to a (sandbox) school.
+  wondeSchoolId String? @unique @map("wonde_school_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -32,8 +34,42 @@ model Tenant {
   attendanceRecords  AttendanceRecord[]
   behaviourIncidents BehaviourIncident[]
   attainmentRecords  AttainmentRecord[]
+  syncRuns           SyncRun[]
 
   @@map("tenants")
+}
+
+enum SyncType {
+  STUDENTS
+  ATTENDANCE
+  BEHAVIOUR
+  ATTAINMENT
+}
+
+enum SyncStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// One row per sync job execution — the audit trail for ingestion. Stats
+// carry created/updated/skipped counts so idempotency is observable.
+model SyncRun {
+  id         String     @id @default(cuid())
+  tenantId   String     @map("tenant_id")
+  type       SyncType
+  status     SyncStatus @default(QUEUED)
+  stats      Json?
+  error      String?
+  queuedAt   DateTime   @default(now()) @map("queued_at")
+  startedAt  DateTime?  @map("started_at")
+  finishedAt DateTime?  @map("finished_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, type, queuedAt])
+  @@map("sync_runs")
 }
 
 // A pupil on a school's roll. Pupil data always belongs to exactly one
@@ -43,6 +79,8 @@ model Tenant {
 model Pupil {
   id                String   @id @default(cuid())
   tenantId          String   @map("tenant_id")
+  // Wonde student id — the idempotency key for the students sync job.
+  wondeId           String?  @map("wonde_id")
   // Synthetic stand-in for the Unique Pupil Number format.
   upn               String   @unique
   firstName         String   @map("first_name")
@@ -58,6 +96,7 @@ model Pupil {
   behaviourIncidents BehaviourIncident[]
   attainmentRecords  AttainmentRecord[]
 
+  @@unique([tenantId, wondeId])
   @@index([tenantId])
   @@index([tenantId, yearGroup])
   @@map("pupils")
@@ -78,6 +117,8 @@ model AttendanceRecord {
   id         String            @id @default(cuid())
   tenantId   String            @map("tenant_id")
   pupilId    String            @map("pupil_id")
+  // Wonde record id — idempotency key for synced rows (null for seed data).
+  sourceId   String?           @map("source_id")
   date       DateTime          @db.Date
   session    AttendanceSession
   code       String
@@ -89,6 +130,7 @@ model AttendanceRecord {
   pupil  Pupil  @relation(fields: [pupilId], references: [id], onDelete: Cascade)
 
   @@unique([pupilId, date, session])
+  @@unique([tenantId, sourceId])
   @@index([tenantId, date])
   @@map("attendance_records")
 }
@@ -98,6 +140,8 @@ model BehaviourIncident {
   id          String   @id @default(cuid())
   tenantId    String   @map("tenant_id")
   pupilId     String   @map("pupil_id")
+  // Wonde behaviour id + student id — idempotency key for synced rows.
+  sourceId    String?  @map("source_id")
   date        DateTime @db.Date
   category    String
   severity    Int
@@ -107,6 +151,7 @@ model BehaviourIncident {
   tenant Tenant @relation(fields: [tenantId], references: [id])
   pupil  Pupil  @relation(fields: [pupilId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, sourceId])
   @@index([tenantId, date])
   @@index([pupilId, date])
   @@map("behaviour_incidents")
@@ -120,6 +165,8 @@ model AttainmentRecord {
   id         String   @id @default(cuid())
   tenantId   String   @map("tenant_id")
   pupilId    String   @map("pupil_id")
+  // Wonde result id — idempotency key for synced rows (null for seed data).
+  sourceId   String?  @map("source_id")
   subject    String
   assessedAt DateTime @map("assessed_at") @db.Date
   score      Int
@@ -129,6 +176,7 @@ model AttainmentRecord {
   pupil  Pupil  @relation(fields: [pupilId], references: [id], onDelete: Cascade)
 
   @@unique([pupilId, subject, assessedAt])
+  @@unique([tenantId, sourceId])
   @@index([tenantId, assessedAt])
   @@map("attainment_records")
 }
