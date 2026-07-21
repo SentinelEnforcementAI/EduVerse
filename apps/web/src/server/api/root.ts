@@ -1,3 +1,4 @@
+import { auditRouter } from "@/server/api/routers/audit";
 import { authRouter } from "@/server/api/routers/auth";
 import { healthRouter } from "@/server/api/routers/health";
 import { signalsRouter } from "@/server/api/routers/signals";
@@ -11,6 +12,7 @@ export const appRouter = createTRPCRouter({
   tenant: tenantRouter,
   sync: syncRouter,
   signals: signalsRouter,
+  audit: auditRouter,
 });
 
 export type AppRouter = typeof appRouter;
