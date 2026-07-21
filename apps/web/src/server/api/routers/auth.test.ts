@@ -18,6 +18,8 @@ function contextWith(overrides: Partial<TRPCContext>): TRPCContext {
   return {
     db: {} as TRPCContext["db"],
     session: null,
+    tenantId: null,
+    tenantDb: null,
     headers: new Headers(),
     ...overrides,
   };

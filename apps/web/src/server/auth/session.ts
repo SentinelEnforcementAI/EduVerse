@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-import { db, type User } from "@sentinel/db";
+import { systemDb, type User } from "@sentinel/db";
 
 import { env } from "@/env";
 import {
@@ -34,7 +34,7 @@ export async function createSession(user: {
 }): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken();
   const expiresAt = sessionExpiry();
-  await db.session.create({
+  await systemDb.session.create({
     data: {
       tokenHash: hashToken(token),
       userId: user.id,
@@ -51,7 +51,7 @@ export async function getAuthSession(): Promise<AuthSession | null> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const session = await db.session.findUnique({
+  const session = await systemDb.session.findUnique({
     where: { tokenHash: hashToken(token) },
     include: { user: true },
   });
@@ -67,7 +67,7 @@ export async function revokeCurrentSession(): Promise<void> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return;
 
-  await db.session.updateMany({
+  await systemDb.session.updateMany({
     where: { tokenHash: hashToken(token), revokedAt: null },
     data: { revokedAt: new Date() },
   });

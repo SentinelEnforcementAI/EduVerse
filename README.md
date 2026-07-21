@@ -89,16 +89,26 @@ dashboard.
   `docker compose ps` and wait for "healthy".
 - **Port 3000 or 5432 already in use** — something else on your machine is
   using it; quit that app or ask for help changing the port.
+- **Database errors after pulling new changes** — the database setup may have
+  changed. Reset it with `docker compose down -v` (deletes local dev data,
+  which is only ever synthetic) then `docker compose up -d` and
+  `pnpm db:migrate`.
 
 ## Checks (what CI runs)
 
 ```bash
 pnpm lint        # code style and correctness rules
 pnpm typecheck   # TypeScript, strict
-pnpm test        # unit tests
+pnpm test        # unit tests + row-level security isolation tests
 ```
 
-GitHub Actions runs all three on every pull request and push to `main`.
+The row-level security tests run against the real local database, so
+`pnpm test` needs Docker Compose up (step 3 above) and a `.env` file. This is
+deliberate: tenant isolation lives in Postgres policies, and the tests prove
+those policies hold — a school can never see another school's data.
+
+GitHub Actions runs all three on every pull request and push to `main`,
+with a throwaway Postgres for the isolation tests.
 
 ## Useful commands
 

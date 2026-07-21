@@ -1,9 +1,11 @@
 // Sentinel Watch — database schema
 //
-// Every table carries tenant_id (school/trust). In build step 1 (auth shell)
-// tenant_id is nullable because tenancy + RLS land as build step 2, which will
-// tighten these columns and add DB-level RLS policies with tests. Do not build
-// features on top of nullable tenant_id — treat step 2 as the enforcement point.
+// Every table carries tenant_id (school/trust) and is protected by row-level
+// security enforced in the database (see the tenancy_rls migration). Policies
+// default-deny: a connection sees nothing unless it has explicitly set either
+// a tenant context (app.tenant_id) or the system context (app.context =
+// 'system', used by auth flows and background jobs). Use dbForTenant() /
+// systemDb from this package — never query with an unscoped client.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,6 +14,22 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// A tenant is a school (Downlands, Patcham) or, later, a trust.
+// CTO-DECISION: MAT hierarchy (trust → schools, MAT-level users spanning
+// schools). Flat tenants are the simplest working version for the two
+// design-partner schools; nesting can be added without breaking tenant_id.
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("tenants")
 }
 
 // A user of the platform (DSL, pastoral staff, MAT-level user).
@@ -27,14 +45,17 @@ model User {
   // to permissions. Simplest working version: no role column yet; every signed-in
   // user is treated as a DSL for the design-partner MVP.
   // CTO-DECISION: tenant membership model (single school vs MAT-level users who
-  // span schools). Nullable single tenant_id is the simplest working version;
-  // build step 2 (tenancy + RLS) formalises this.
+  // span schools). Nullable single tenant_id is the simplest working version.
+  // NULL tenant_id = platform-level user, visible only to the system context.
   tenantId  String?  @map("tenant_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id])
   magicLinkTokens MagicLinkToken[]
   sessions        Session[]
+
+  @@index([tenantId])
 
   @@map("users")
 }

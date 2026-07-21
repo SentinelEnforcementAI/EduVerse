@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { db } from "@sentinel/db";
+import { systemDb } from "@sentinel/db";
 
 import { env } from "@/env";
 import { consumeMagicLink } from "@/server/auth/magic-link";
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const result = await consumeMagicLink(db, token);
+  const result = await consumeMagicLink(systemDb, token);
   if (!result.ok) {
     return NextResponse.redirect(
       new URL("/sign-in?error=invalid_link", env.APP_URL),
