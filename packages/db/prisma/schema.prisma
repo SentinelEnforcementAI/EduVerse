@@ -111,6 +111,32 @@ model AuditEvent {
   @@map("audit_events")
 }
 
+enum DecisionKind {
+  CONFIRM
+  DISMISS
+  ESCALATE
+}
+
+// A DSL's decision on a signal — the safeguarding record at the heart of the
+// human-in-the-loop principle. Append-only like audit_events: no foreign
+// keys (the record outlives whatever it references) and no UPDATE/DELETE
+// policies, so no connection can ever rewrite a decision.
+model SignalDecision {
+  id        String       @id @default(cuid())
+  tenantId  String       @map("tenant_id")
+  signalId  String       @map("signal_id")
+  pupilId   String       @map("pupil_id")
+  userId    String       @map("user_id")
+  kind      DecisionKind
+  note      String?
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@index([signalId])
+  @@index([pupilId, createdAt])
+  @@map("signal_decisions")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.

@@ -13,7 +13,15 @@ import {
 } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
+import { DecisionPanel } from "./decision-panel";
+
 export const metadata = { title: "Signal detail" };
+
+const DECISION_LABELS = {
+  CONFIRM: "Confirmed",
+  DISMISS: "Dismissed",
+  ESCALATE: "Escalated",
+} as const;
 
 type Reasoning = {
   summary?: string;
@@ -124,12 +132,42 @@ export default async function SignalDetailPage({
           <p className="text-xs text-muted-foreground">
             Rule description: {signal.ruleVersion.description} · Raised by
             engine run {signal.execution.id} as of{" "}
-            {signal.execution.asOf.toLocaleDateString("en-GB")}. Confirm,
-            dismiss, and escalate arrive with the next build step — every
-            decision stays with the DSL.
+            {signal.execution.asOf.toLocaleDateString("en-GB")}.
           </p>
         </CardContent>
       </Card>
+
+      {signal.status === "OPEN" ? (
+        <DecisionPanel signalId={signal.id} />
+      ) : null}
+
+      {signal.decisions.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Decision history</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-3 text-sm">
+              {signal.decisions.map((decision) => (
+                <li key={decision.id} className="flex flex-col gap-0.5">
+                  <span>
+                    <span className="font-medium">
+                      {DECISION_LABELS[decision.kind]}
+                    </span>{" "}
+                    by {decision.decidedBy} on{" "}
+                    {decision.createdAt.toLocaleString("en-GB")}
+                  </span>
+                  {decision.note ? (
+                    <span className="text-muted-foreground">
+                      “{decision.note}”
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

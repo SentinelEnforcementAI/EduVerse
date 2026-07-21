@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, tenantProcedure } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
+import { decideSignal } from "@/server/signals/decide";
 
 const STATUSES = ["OPEN", "CONFIRMED", "DISMISSED", "ESCALATED"] as const;
 
@@ -98,6 +99,49 @@ export const signalsRouter = createTRPCRouter({
         pupilId: signal.pupilId,
       });
 
-      return signal;
+      // Decision history (append-only table, no relations — joined by hand).
+      const decisions = await ctx.tenantDb.signalDecision.findMany({
+        where: { signalId: signal.id },
+        orderBy: { createdAt: "desc" },
+      });
+      const users = await ctx.tenantDb.user.findMany({
+        where: { id: { in: decisions.map((d) => d.userId) } },
+        select: { id: true, name: true, email: true },
+      });
+      const usersById = new Map(users.map((u) => [u.id, u]));
+
+      return {
+        ...signal,
+        decisions: decisions.map((decision) => ({
+          id: decision.id,
+          kind: decision.kind,
+          note: decision.note,
+          createdAt: decision.createdAt,
+          decidedBy:
+            usersById.get(decision.userId)?.name ??
+            usersById.get(decision.userId)?.email ??
+            "Unknown user",
+        })),
+      };
     }),
+
+  // A DSL's decision: confirm, dismiss (note required), or escalate.
+  // Applied atomically with the decision record and audit entry.
+  decide: tenantProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        kind: z.enum(["CONFIRM", "DISMISS", "ESCALATE"]),
+        note: z.string().max(2000).optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      decideSignal(ctx.tenantDb, {
+        tenantId: ctx.tenantId,
+        userId: ctx.session.user.id,
+        signalId: input.signalId,
+        kind: input.kind,
+        note: input.note ?? null,
+      }),
+    ),
 });
