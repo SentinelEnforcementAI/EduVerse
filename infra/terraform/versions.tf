@@ -8,8 +8,10 @@ terraform {
     }
   }
 
-  # CTO-DECISION: remote state (S3 + DynamoDB lock) once the AWS account
-  # exists. Local state is acceptable only for the very first bootstrap.
+  # Remote state in S3 (native lockfile). The bootstrap workflow creates
+  # the bucket and passes the config at init; for local plans without it,
+  # use `terraform init -backend=false`.
+  backend "s3" {}
 }
 
 # UK data residency is structural: the region is hardcoded, not a variable.

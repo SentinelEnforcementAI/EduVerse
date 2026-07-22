@@ -1,0 +1,207 @@
+# One-click AWS bootstrap (eu-west-2). Runs the whole infra/README.md
+# runbook from CI: state bucket → terraform apply → SES identity → images →
+# secrets → migrations → app role → seed + first DSL → live services.
+# Idempotent: safe to re-run if a step fails partway.
+#
+# Requires repository secrets AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+# (the sentinel-bootstrap IAM user). Deactivate that key after bootstrap;
+# routine releases use the Deploy workflow.
+name: Bootstrap AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      email_address:
+        description: "Sender + first-DSL email (will receive the SES verification mail and own the first sign-in)"
+        required: true
+        type: string
+      seed_demo_data:
+        description: "Seed the two synthetic schools (Downlands, Patcham)"
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: bootstrap-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Provision, release, provision DSL
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure Terraform state bucket
+        id: state
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="$PROJECT-tfstate-$ACCOUNT"
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            aws s3api create-bucket --bucket "$BUCKET" \
+              --create-bucket-configuration LocationConstraint=$AWS_REGION
+            aws s3api put-bucket-versioning --bucket "$BUCKET" \
+              --versioning-configuration Status=Enabled
+            aws s3api put-public-access-block --bucket "$BUCKET" \
+              --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          fi
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: Terraform apply (infrastructure)
+        working-directory: infra/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ steps.state.outputs.bucket }}" \
+            -backend-config="key=production.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="use_lockfile=true"
+          terraform apply -auto-approve \
+            -var "app_url=http://bootstrap.invalid" \
+            -var "email_from=Sentinel Watch <${{ inputs.email_address }}>"
+
+      - name: Create SES identity (verification email goes out now)
+        run: |
+          aws sesv2 create-email-identity \
+            --email-identity "${{ inputs.email_address }}" 2>/dev/null \
+            || echo "identity already exists"
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f apps/web/Dockerfile \
+            -t "$REGISTRY/$PROJECT/web:$TAG" -t "$REGISTRY/$PROJECT/web:latest" .
+          docker build -f Dockerfile.worker \
+            -t "$REGISTRY/$PROJECT/worker:$TAG" -t "$REGISTRY/$PROJECT/worker:latest" .
+          docker push --all-tags "$REGISTRY/$PROJECT/web"
+          docker push --all-tags "$REGISTRY/$PROJECT/worker"
+
+      - name: Assemble database secrets (owner)
+        working-directory: infra/terraform
+        run: |
+          MASTER_ARN=$(terraform output -raw rds_master_secret_arn)
+          ENDPOINT=$(terraform output -raw rds_endpoint)
+          CREDS=$(aws secretsmanager get-secret-value --secret-id "$MASTER_ARN" \
+            --query SecretString --output text)
+          PASS=$(echo "$CREDS" | jq -r '.password|@uri')
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/database-url-owner" \
+            --secret-string "postgresql://sentinel_owner:$PASS@$ENDPOINT:5432/sentinel_watch" \
+            >/dev/null
+          echo "owner connection string stored"
+
+      - name: Task runner setup
+        id: net
+        working-directory: infra/terraform
+        run: |
+          SUBNETS=$(terraform output -json private_subnet_ids | jq -r 'join(",")')
+          SG=$(terraform output -raw worker_security_group_id)
+          echo "subnets=$SUBNETS" >> "$GITHUB_OUTPUT"
+          echo "sg=$SG" >> "$GITHUB_OUTPUT"
+
+      # Reusable one-off task runner: run_task "<name>" '<container overrides json>'
+      - name: Define task helper
+        run: |
+          cat > /tmp/run_task.sh <<'SCRIPT'
+          set -euo pipefail
+          NAME="$1"; OVERRIDES="$2"
+          ARN=$(aws ecs run-task --cluster "$PROJECT" \
+            --task-definition "$PROJECT-migrate" --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            ${OVERRIDES:+--overrides "$OVERRIDES"} \
+            --query 'tasks[0].taskArn' --output text)
+          echo "$NAME task: $ARN"
+          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$ARN"
+          EXIT=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          [ "$EXIT" = "0" ] || { echo "$NAME failed (exit $EXIT) — see /ecs/$PROJECT/worker logs"; exit 1; }
+          SCRIPT
+          chmod +x /tmp/run_task.sh
+
+      - name: Run database migrations
+        env:
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SG: ${{ steps.net.outputs.sg }}
+        run: /tmp/run_task.sh migrations ""
+
+      - name: Create application role + store app connection string
+        working-directory: infra/terraform
+        env:
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SG: ${{ steps.net.outputs.sg }}
+        run: |
+          APP_PASS=$(openssl rand -hex 24)
+          /tmp/run_task.sh app-role "{\"containerOverrides\":[{\"name\":\"migrate\",\"command\":[\"pnpm\",\"--filter\",\"@sentinel/db\",\"app-role:prod\"],\"environment\":[{\"name\":\"APP_ROLE_PASSWORD\",\"value\":\"$APP_PASS\"}]}]}"
+          ENDPOINT=$(terraform output -raw rds_endpoint)
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/database-url-app" \
+            --secret-string "postgresql://sentinel_app:$APP_PASS@$ENDPOINT:5432/sentinel_watch" \
+            >/dev/null
+          echo "app connection string stored"
+
+      - name: Seed synthetic schools
+        if: ${{ inputs.seed_demo_data }}
+        env:
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SG: ${{ steps.net.outputs.sg }}
+        run: |
+          /tmp/run_task.sh seed '{"containerOverrides":[{"name":"migrate","command":["pnpm","--filter","@sentinel/db","db:seed:prod"]}]}'
+
+      - name: Provision first DSL account
+        env:
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SG: ${{ steps.net.outputs.sg }}
+        run: |
+          /tmp/run_task.sh provision-dsl "{\"containerOverrides\":[{\"name\":\"migrate\",\"command\":[\"pnpm\",\"--filter\",\"@sentinel/db\",\"user:add:prod\",\"--email\",\"${{ inputs.email_address }}\",\"--tenant\",\"downlands\",\"--name\",\"Founder\"]}]}"
+
+      - name: Re-apply with real APP_URL and release services
+        working-directory: infra/terraform
+        run: |
+          ALB=$(terraform output -raw alb_dns_name)
+          terraform apply -auto-approve \
+            -var "app_url=http://$ALB" \
+            -var "email_from=Sentinel Watch <${{ inputs.email_address }}>"
+          aws ecs update-service --cluster "$PROJECT" --service web \
+            --force-new-deployment >/dev/null
+          aws ecs update-service --cluster "$PROJECT" --service worker \
+            --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "$PROJECT" --services web worker
+
+      - name: Summary
+        working-directory: infra/terraform
+        run: |
+          ALB=$(terraform output -raw alb_dns_name)
+          {
+            echo "## Sentinel Watch is live"
+            echo ""
+            echo "- **App:** http://$ALB"
+            echo "- **Sign in as:** ${{ inputs.email_address }} (check the SES verification email first)"
+            echo "- Deactivate the sentinel-bootstrap access key in IAM once sign-in works."
+          } >> "$GITHUB_STEP_SUMMARY"
