@@ -18,6 +18,9 @@ RUN pnpm --filter @sentinel/db db:generate
 RUN NEXT_PHASE=phase-production-build pnpm --filter web build
 
 FROM node:22-slim AS runtime
+# Prisma's engines need OpenSSL, which slim images do not ship.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 WORKDIR /app
 RUN groupadd --system app && useradd --system --gid app app
