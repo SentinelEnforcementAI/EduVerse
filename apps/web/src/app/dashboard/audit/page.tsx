@@ -55,10 +55,8 @@ export default async function AuditPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-serif text-2xl font-bold tracking-tight">
-          Audit log
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
+        <p className="mt-1 text-base text-muted-foreground">
           Every read and write against a child&apos;s record: who, what, when.
           Entries are permanent — they can never be edited or deleted, and
           viewing this log is itself recorded.
@@ -70,7 +68,7 @@ export default async function AuditPage({
           href={auditUrl(0)}
           className={
             !action
-              ? "rounded-full bg-primary px-4 py-2.5 font-bold tabular-nums text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              ? "rounded-full bg-primary px-4 py-2.5 font-medium tabular-nums text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               : "rounded-full border px-4 py-2.5 tabular-nums text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           }
         >
@@ -82,7 +80,7 @@ export default async function AuditPage({
             href={auditUrl(0, availableAction)}
             className={
               action === availableAction
-                ? "rounded-full bg-primary px-4 py-2.5 font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                ? "rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 : "rounded-full border px-4 py-2.5 text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             }
           >
@@ -91,8 +89,8 @@ export default async function AuditPage({
         ))}
       </div>
 
-      {/* Audit entries are deliberately boring (DESIGN.md): plain Lato at
-          12/14, no status colour, no drama. */}
+      {/* Audit entries are deliberately boring (DESIGN.md v2): plain 12/13
+          rows, no status colour, no drama. */}
       <Card>
         <CardContent className="pt-6">
           {result.events.length === 0 ? (
@@ -102,11 +100,11 @@ export default async function AuditPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-3 pr-4 font-bold">When</th>
-                    <th className="py-3 pr-4 font-bold">Who</th>
-                    <th className="py-3 pr-4 font-bold">Action</th>
-                    <th className="py-3 pr-4 font-bold">Pupil</th>
-                    <th className="py-3 font-bold">Detail</th>
+                    <th className="py-3 pr-4 font-medium">When</th>
+                    <th className="py-3 pr-4 font-medium">Who</th>
+                    <th className="py-3 pr-4 font-medium">Action</th>
+                    <th className="py-3 pr-4 font-medium">Pupil</th>
+                    <th className="py-3 font-medium">Detail</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -142,7 +140,7 @@ export default async function AuditPage({
             Previous
           </Button>
         )}
-        <span className="text-sm tabular-nums text-muted-foreground">
+        <span className="text-base tabular-nums text-muted-foreground">
           Page {page + 1} of {lastPage + 1}
         </span>
         {page < lastPage ? (

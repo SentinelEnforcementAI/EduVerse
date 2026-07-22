@@ -1,23 +1,44 @@
 import { cn } from "@/lib/utils";
 
-// Severity is amber weight, not new colours (DESIGN.md): the highest
-// severity gets the heaviest amber treatment; lower severities step down to
-// a soft amber tint and then a quiet neutral. Text always states the
-// severity too — never colour alone — and amber is never used as text
-// colour (it fails AA on cream); it is a background with ink text.
+// DESIGN.md v2 risk indication: severity bands, not numeric scores — the
+// engine's 1–3 severity maps to Monitor / Medium / High. Status colours
+// appear as pill tints with a bold dot and ink text (red and amber as small
+// text fail AA); every band carries its label, never colour alone.
+const BANDS = {
+  high: {
+    label: "High risk",
+    pill: "bg-risk-tint",
+    dot: "bg-risk",
+  },
+  medium: {
+    label: "Medium",
+    pill: "bg-warning-tint",
+    dot: "bg-warning",
+  },
+  monitor: {
+    label: "Monitor",
+    pill: "bg-success-tint",
+    dot: "bg-success",
+  },
+} as const;
+
+export function severityBand(severity: number): keyof typeof BANDS {
+  if (severity >= 3) return "high";
+  if (severity === 2) return "medium";
+  return "monitor";
+}
+
 export function SeverityBadge({ severity }: { severity: number }) {
+  const band = BANDS[severityBand(severity)];
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs",
-        severity >= 3
-          ? "bg-signal font-bold text-signal-foreground"
-          : severity === 2
-            ? "bg-signal-soft font-bold text-signal-foreground"
-            : "bg-muted text-foreground",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-ink",
+        band.pill,
       )}
     >
-      severity {severity}
+      <span className={cn("size-1.5 rounded-full", band.dot)} aria-hidden />
+      {band.label}
     </span>
   );
 }

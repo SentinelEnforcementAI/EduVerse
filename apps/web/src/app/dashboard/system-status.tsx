@@ -19,21 +19,22 @@ export function SystemStatus() {
         <CardTitle>System status</CardTitle>
         <CardDescription>Live check against the API.</CardDescription>
       </CardHeader>
-      <CardContent className="text-sm">
+      <CardContent className="text-base">
         {ping.isLoading ? (
           <span className="text-muted-foreground">Checking…</span>
         ) : ping.data ? (
           <div className="flex flex-col gap-1">
+            {/* Ops status stays monochrome — status colours are reserved
+                for risk meaning on children (DESIGN.md v2). */}
             <span>
-              API:{" "}
-              <span className="font-bold text-forest">{ping.data.status}</span>
+              API: <span className="font-medium">{ping.data.status}</span>
             </span>
             <span className="tabular-nums text-muted-foreground">
               Checked at {ping.data.time.toLocaleTimeString("en-GB")}
             </span>
           </div>
         ) : (
-          <span className="font-bold">API unreachable</span>
+          <span className="font-medium">API unreachable</span>
         )}
       </CardContent>
     </Card>

@@ -43,66 +43,67 @@ export default async function DashboardPage() {
     run: syncRuns.find((run) => run.type === type) ?? null,
   }));
 
+  // KPI stat row (DESIGN.md v2): value, label. Deltas need history the
+  // schema doesn't record yet — values only, no invented trends.
+  const stats = [
+    {
+      label: "Pupils on roll",
+      value: pupilCount,
+      hint: "Synthetic data until DPAs are signed",
+    },
+    {
+      label: "Open signals",
+      value: openSignals,
+      hint: "Awaiting a DSL decision",
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-serif text-2xl font-bold tracking-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Welcome{session?.user.name ? `, ${session.user.name}` : ""}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           Signals for your school will appear here once the risk engine is
           live.
         </p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pupils on roll</CardTitle>
-            <CardDescription>
-              Synthetic data for development — no real pupil data until DPAs
-              are signed.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {pupilCount === null ? (
-              <span className="text-sm text-muted-foreground">
-                No school assigned yet.
-              </span>
-            ) : (
-              <span className="text-2xl font-bold tabular-nums">
-                {pupilCount}
-              </span>
-            )}
-          </CardContent>
-        </Card>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <Card key={stat.label} className="p-5">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {stat.label}
+            </div>
+            <div className="mt-2 text-3xl font-semibold tabular-nums">
+              {stat.value ?? "—"}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {stat.value === null ? "No school assigned yet" : stat.hint}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Signals</CardTitle>
             <CardDescription>
-              Raised by the rules engine, each with its full reasoning. The
-              detail view arrives with build step 6 — and nothing is actioned
-              without a DSL&apos;s decision.
+              Raised by the rules engine, each with its full reasoning —
+              nothing is actioned without a DSL&apos;s decision.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {openSignals === null ? (
-              <span className="text-sm text-muted-foreground">
+              <span className="text-base text-muted-foreground">
                 No school assigned yet.
               </span>
             ) : (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-bold tabular-nums">
-                    {openSignals}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    open signal{openSignals === 1 ? "" : "s"} awaiting review
-                  </span>
-                </div>
-                <Button asChild size="sm" className="self-start">
-                  <Link href="/dashboard/signals">Review signals</Link>
-                </Button>
-              </div>
+              <Button asChild size="sm">
+                <Link href="/dashboard/signals">Review signals</Link>
+              </Button>
             )}
           </CardContent>
         </Card>
@@ -115,20 +116,18 @@ export default async function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="flex flex-col gap-2 text-sm">
+            <ul className="flex flex-col gap-2 text-base">
               {latestSyncByType.map(({ type, run }) => (
                 <li key={type} className="flex items-center justify-between">
                   <span>{SYNC_TYPE_LABELS[type]}</span>
-                  {/* Success reads as forest, never green; failure carries
-                      weight through bold text, never red (DESIGN.md). */}
+                  {/* Ops status stays monochrome: red/amber/green carry risk
+                      meaning about children exclusively (DESIGN.md v2). */}
                   {run ? (
                     <span
                       className={
                         run.status === "FAILED"
-                          ? "font-bold tabular-nums"
-                          : run.status === "SUCCEEDED"
-                            ? "tabular-nums text-forest"
-                            : "tabular-nums text-muted-foreground"
+                          ? "font-medium tabular-nums"
+                          : "tabular-nums text-muted-foreground"
                       }
                     >
                       {run.status.toLowerCase()}

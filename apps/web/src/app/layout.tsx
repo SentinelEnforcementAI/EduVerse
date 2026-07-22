@@ -1,22 +1,16 @@
 import type { Metadata } from "next";
-import { Lato, Playfair_Display } from "next/font/google";
+import { Inter } from "next/font/google";
 
 import { TRPCReactProvider } from "@/trpc/react";
 
 import "./globals.css";
 
-// DESIGN.md typography: Lato (400/700) for everything functional,
-// Playfair Display for the wordmark and page-level headings only.
-const lato = Lato({
-  variable: "--font-lato",
+// DESIGN.md v2 typography: a single sans family throughout. Weights 400
+// body / 500 labels / 600 headings and KPI numbers — nothing heavier in-app.
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "700"],
-});
-
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
@@ -34,10 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en-GB"
-      className={`${lato.variable} ${playfair.variable} h-full antialiased`}
-    >
+    <html lang="en-GB" className={`${inter.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
         <TRPCReactProvider>{children}</TRPCReactProvider>
       </body>

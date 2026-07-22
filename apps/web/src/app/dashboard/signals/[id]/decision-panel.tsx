@@ -25,9 +25,10 @@ export function DecisionPanel({ signalId }: { signalId: string }) {
     decide.mutate({ signalId, kind, note: note.trim() || undefined });
   };
 
-  // DESIGN.md: the decision actions stay visible while the DSL reads the
-  // reasoning — the panel sticks to the bottom of the viewport. Escalate is
-  // forest, not amber and never red; Dismiss is a quiet outline.
+  // DESIGN.md v2: the decision actions stay visible while the DSL reads
+  // the reasoning — the panel sticks to the bottom of the viewport.
+  // Confirm is the cobalt primary; Escalate is secondary; Dismiss is an
+  // ink outline — never red, red is for children at risk, not UI actions.
   return (
     <div className="sticky bottom-0 -mx-2 bg-background px-2 pb-2 pt-2">
       <Card>
@@ -58,7 +59,7 @@ export function DecisionPanel({ signalId }: { signalId: string }) {
           </div>
 
           {decide.error ? (
-            <p className="border-l-2 border-forest bg-muted px-3 py-2 text-sm font-bold">
+            <p className="border-l-2 border-ink bg-muted px-3 py-2 text-base font-medium">
               {decide.error.message}
             </p>
           ) : null}
@@ -80,7 +81,7 @@ export function DecisionPanel({ signalId }: { signalId: string }) {
             <Button
               onClick={() => submit("DISMISS")}
               disabled={decide.isPending}
-              variant="outline"
+              variant="destructive"
             >
               Dismiss
             </Button>
