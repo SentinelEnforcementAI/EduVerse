@@ -15,22 +15,18 @@ export function normaliseEmail(email: string): string {
 
 // Starts the magic link flow for an email address.
 //
-// CTO-DECISION: sign-in eligibility. The simplest working version creates a
-// user on first sign-in so the auth shell is usable before any admin tooling
-// exists. Before real school users arrive this must become invite-only
-// (DSLs are provisioned, never self-served) — swap the upsert for a lookup
-// that declines unknown addresses.
+// Sign-in is invite-only: DSL accounts are provisioned (seed or the
+// user:add script in @sentinel/db), never self-served. Unknown addresses
+// are silently ignored — the caller's response is identical either way, so
+// the endpoint cannot be used to discover which addresses hold accounts.
 export async function requestMagicLink(
   db: SystemDb,
   rawEmail: string,
 ): Promise<void> {
   const email = normaliseEmail(rawEmail);
 
-  const user = await db.user.upsert({
-    where: { email },
-    update: {},
-    create: { email },
-  });
+  const user = await db.user.findUnique({ where: { email } });
+  if (!user) return;
 
   const token = generateToken();
   await db.magicLinkToken.create({

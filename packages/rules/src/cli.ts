@@ -4,9 +4,10 @@ import { systemDb } from "@sentinel/db";
 
 import { runRulesForTenant } from "./engine";
 
-// Runs the rules engine for a tenant: pnpm rules --tenant downlands
-// CTO-DECISION: scheduling (nightly per school? after each sync?). Manual
-// CLI runs are the simplest working version for the design-partner MVP.
+// Runs the rules engine for a tenant manually: pnpm rules --tenant downlands
+// Scheduled runs are handled by the worker (@sentinel/sync rules-queue):
+// debounced after each successful sync, with a nightly 02:00 UTC sweep as
+// the fallback. This CLI remains for ad-hoc and historical (--as-of) runs.
 
 async function main() {
   const { values } = parseArgs({
