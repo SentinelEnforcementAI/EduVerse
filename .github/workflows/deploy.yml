@@ -2,12 +2,12 @@
 # once the infrastructure exists (see infra/README.md).
 #
 # Required repository configuration:
-#   secret  AWS_DEPLOY_ROLE_ARN — IAM role assumable via GitHub OIDC, with
-#           permission to push to ECR, register task definitions, run the
-#           migrate task, and update the two ECS services.
+#   secrets AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (same key the
+#   Bootstrap workflow uses).
 #
-# CTO-DECISION: automatic deploys on merge to main. Manual dispatch is the
-# simplest safe version while the platform has no staging environment.
+# CTO-DECISION: switch to a GitHub-OIDC-assumable IAM role (no long-lived
+# keys) and automatic deploys on merge to main. Manual dispatch with the
+# bootstrap key is the simplest working version.
 name: Deploy
 
 on:
@@ -22,7 +22,6 @@ env:
   PROJECT: sentinel-watch
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -35,7 +34,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to ECR

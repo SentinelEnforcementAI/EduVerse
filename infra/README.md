@@ -24,8 +24,17 @@ gateway, ALB and Fargate hours.
 
 ## One-time bootstrap
 
-Prerequisites: an AWS account dedicated to Sentinel Watch, Terraform ≥ 1.9,
-AWS CLI, Docker, and credentials with admin on that account.
+**The easy way:** add the `sentinel-bootstrap` IAM user's access key as the
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` repository secrets, then run
+the **Bootstrap AWS** workflow from the Actions tab. It performs every step
+below — state bucket, terraform apply, SES identity, images, secrets,
+migrations, app role, optional synthetic seed, first DSL account — and
+prints the app URL when done. Re-running it is safe. Deactivate the access
+key in IAM once you're signed in.
+
+The manual steps below describe what the workflow does (and how to do it
+by hand if you ever need to). Prerequisites for the manual path: Terraform
+≥ 1.9, AWS CLI, Docker, admin credentials.
 
 1. **Plan and apply the infrastructure**
 
