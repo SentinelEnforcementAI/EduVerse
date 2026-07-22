@@ -5,12 +5,12 @@ import { BrandLockup } from "@/components/brand";
 
 export const metadata = { title: "Sign in" };
 
-// Dark surfaces are reserved for auth screens, app-icon contexts and
-// marketing (DESIGN.md v2) — the working app stays light.
+// Brand refresh: the whole product stays light — auth included. Dark ink
+// is reserved for the app icon and marketing decks.
 export default function SignInPage() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-8 bg-ink px-6 py-12">
-      <BrandLockup markVariant="cobalt" wordmarkClassName="text-white" />
+    <main className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-12">
+      <BrandLockup markVariant="cobalt" />
       <Suspense>
         <SignInForm />
       </Suspense>
