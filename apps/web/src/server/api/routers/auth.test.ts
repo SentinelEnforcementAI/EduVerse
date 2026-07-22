@@ -54,10 +54,10 @@ describe("auth.requestMagicLink", () => {
   });
 
   it("stores only a hash of the token and emails the raw link", async () => {
-    const upsert = vi.fn().mockResolvedValue(testUser);
+    const findUnique = vi.fn().mockResolvedValue(testUser);
     const create = vi.fn().mockResolvedValue({});
     const db = {
-      user: { upsert },
+      user: { findUnique },
       magicLinkToken: { create },
     } as unknown as TRPCContext["db"];
     const consoleSpy = vi
@@ -71,7 +71,7 @@ describe("auth.requestMagicLink", () => {
 
     expect(result).toEqual({ ok: true });
     // Email is normalised before lookup.
-    expect(upsert).toHaveBeenCalledWith(
+    expect(findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { email: "dsl@downlands.example.org.uk" },
       }),
@@ -85,6 +85,37 @@ describe("auth.requestMagicLink", () => {
     const url = emailOutput.match(/https?:\/\/\S+/)?.[0];
     expect(url).toContain("/api/auth/verify?token=");
     expect(url).not.toContain(tokenHash);
+
+    consoleSpy.mockRestore();
+  });
+
+  // Sign-in is invite-only: an unknown address must not create an account,
+  // must not receive an email, and must get a response indistinguishable
+  // from a known address — so the endpoint can't enumerate accounts.
+  it("silently ignores unknown addresses without creating a user", async () => {
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const tokenCreate = vi.fn();
+    const userCreate = vi.fn();
+    const userUpsert = vi.fn();
+    const db = {
+      user: { findUnique, create: userCreate, upsert: userUpsert },
+      magicLinkToken: { create: tokenCreate },
+    } as unknown as TRPCContext["db"];
+    const consoleSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    const caller = createCaller(contextWith({ db }));
+    const result = await caller.auth.requestMagicLink({
+      email: "stranger@nowhere.example",
+    });
+
+    // Same response as the known-address path.
+    expect(result).toEqual({ ok: true });
+    expect(userCreate).not.toHaveBeenCalled();
+    expect(userUpsert).not.toHaveBeenCalled();
+    expect(tokenCreate).not.toHaveBeenCalled();
+    expect(consoleSpy).not.toHaveBeenCalled();
 
     consoleSpy.mockRestore();
   });

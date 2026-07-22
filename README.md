@@ -97,6 +97,22 @@ sent in development — instead, the sign-in link is printed in the terminal
 where `pnpm dev` is running. Look for a block that says "magic link", copy
 the link into your browser, and you'll land on that school's dashboard.
 
+**Sign-in is invite-only.** An email address that hasn't been provisioned
+gets no link and no account — the form looks the same either way, on
+purpose, so the sign-in page can't be used to discover which addresses
+exist. To provision a DSL:
+
+```bash
+pnpm --filter @sentinel/db user:add \
+  --email dsl@school.org.uk --tenant downlands --name "A. Example"
+```
+
+Every provisioning action is written to that school's audit trail.
+
+**Real email (production):** set `EMAIL_TRANSPORT=ses` and `EMAIL_FROM` in
+the environment. Sign-in links are then sent via AWS SES in eu-west-2 (the
+region is hardcoded — email dispatch stays inside UK infrastructure).
+
 ### Something not working?
 
 - **`docker compose up` fails** — is Docker Desktop actually open?
