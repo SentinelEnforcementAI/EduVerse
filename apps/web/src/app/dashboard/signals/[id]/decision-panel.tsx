@@ -25,61 +25,68 @@ export function DecisionPanel({ signalId }: { signalId: string }) {
     decide.mutate({ signalId, kind, note: note.trim() || undefined });
   };
 
+  // DESIGN.md: the decision actions stay visible while the DSL reads the
+  // reasoning — the panel sticks to the bottom of the viewport. Escalate is
+  // forest, not amber and never red; Dismiss is a quiet outline.
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Your decision</CardTitle>
-        <CardDescription>
-          Confirm if this needs safeguarding attention, escalate if it needs
-          action now, or dismiss with a reason. Every decision is recorded
-          permanently — it cannot be edited or deleted later.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="decision-note">
-            Note{" "}
-            <span className="font-normal text-muted-foreground">
-              (required when dismissing)
-            </span>
-          </Label>
-          <textarea
-            id="decision-note"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            rows={3}
-            placeholder="Context for this decision — what you know, what you'll do next."
-            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
-        </div>
+    <div className="sticky bottom-0 -mx-2 bg-background px-2 pb-2 pt-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Your decision</CardTitle>
+          <CardDescription>
+            Confirm if this needs safeguarding attention, escalate if it needs
+            action now, or dismiss with a reason. Every decision is recorded
+            permanently — it cannot be edited or deleted later.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="decision-note">
+              Note{" "}
+              <span className="font-normal text-muted-foreground">
+                (required when dismissing)
+              </span>
+            </Label>
+            <textarea
+              id="decision-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              placeholder="Context for this decision — what you know, what you'll do next."
+              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
 
-        {decide.error ? (
-          <p className="text-sm text-destructive">{decide.error.message}</p>
-        ) : null}
+          {decide.error ? (
+            <p className="border-l-2 border-forest bg-muted px-3 py-2 text-sm font-bold">
+              {decide.error.message}
+            </p>
+          ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => submit("CONFIRM")}
-            disabled={decide.isPending}
-          >
-            Confirm concern
-          </Button>
-          <Button
-            onClick={() => submit("ESCALATE")}
-            disabled={decide.isPending}
-            variant="destructive"
-          >
-            Escalate
-          </Button>
-          <Button
-            onClick={() => submit("DISMISS")}
-            disabled={decide.isPending}
-            variant="outline"
-          >
-            Dismiss
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => submit("CONFIRM")}
+              disabled={decide.isPending}
+            >
+              Confirm concern
+            </Button>
+            <Button
+              onClick={() => submit("ESCALATE")}
+              disabled={decide.isPending}
+              variant="secondary"
+            >
+              Escalate
+            </Button>
+            <Button
+              onClick={() => submit("DISMISS")}
+              disabled={decide.isPending}
+              variant="outline"
+            >
+              Dismiss
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

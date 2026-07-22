@@ -1,60 +1,86 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
+/*
+ * Sentinel Watch design tokens — DESIGN.md.
+ * Calm, quiet, authoritative. The app lives on cream; dark forest is for
+ * chrome and identity; amber appears ONLY where a child needs attention.
+ *
+ * Palette hexes are working values — replace with the exact CIR brand hexes
+ * before launch (founder to supply).
+ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-}
+  --radius: 0.5rem;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* ── DESIGN.md palette ── */
+  --forest-deep: #1a2e22; /* app chrome, sidebar, primary buttons */
+  --forest: #2e4a38; /* secondary dark, hovers on dark, success tone */
+  --cream: #f7f3e9; /* primary background */
+  --amber: #d9962e; /* signal colour ONLY — never decorative */
+  --ink: #1c1c1a; /* primary text */
+  --slate: #6b7068; /* secondary text, metadata, timestamps */
+
+  /* Derived tones (kept close to the palette, no new hues) */
+  --surface: #fefcf6; /* cards lift slightly off cream */
+  --cream-hover: #efe8d8; /* hover tint on cream surfaces */
+  --border-tone: #e3dcc9; /* quiet borders on cream */
+  --amber-soft: #f3e2c0; /* amber tint for lower-severity indicators */
+
+  /* ── shadcn variable mapping ── */
+  --background: var(--cream);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--forest-deep);
+  --primary-foreground: var(--cream);
+  --secondary: var(--forest);
+  --secondary-foreground: var(--cream);
+  --muted: var(--cream-hover);
+  --muted-foreground: var(--slate);
+  --accent: var(--cream-hover);
+  --accent-foreground: var(--ink);
+  /* No red anywhere in v1 (DESIGN.md). Errors and destructive-adjacent
+   * actions carry weight and wording, not alarm colour. */
+  --destructive: var(--forest-deep);
+  --destructive-foreground: var(--cream);
+  --border: var(--border-tone);
+  --input: var(--border-tone);
+  --ring: var(--forest);
+
+  /* Signal colour — amber means "a child needs attention", nothing else.
+   * Amber-on-cream fails AA as text, so amber is used as a background or
+   * indicator with ink text, never as text colour. */
+  --signal: var(--amber);
+  --signal-soft: var(--amber-soft);
+  --signal-foreground: var(--ink);
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Typography: Lato for everything functional, Playfair Display for the
+   * wordmark and page-level headings only. */
+  --font-sans: var(--font-lato);
+  --font-serif: var(--font-playfair);
+
+  /* Type scale (DESIGN.md): 12 metadata, 14 body/tables, 16 emphasis,
+   * 20 section heads, 28 page titles. No other sizes. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.55;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.25;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -74,6 +100,16 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Palette utilities: bg-forest-deep, text-slate, bg-signal, … */
+  --color-forest-deep: var(--forest-deep);
+  --color-forest: var(--forest);
+  --color-cream: var(--cream);
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-signal-foreground: var(--signal-foreground);
 }
 
 @layer base {
@@ -81,6 +117,15 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground text-sm;
+  }
+  /* Motion stays quiet: nothing longer than 150ms (DESIGN.md). */
+  a,
+  button,
+  input,
+  textarea,
+  [role="tab"] {
+    transition-duration: 150ms;
+    transition-timing-function: ease;
   }
 }

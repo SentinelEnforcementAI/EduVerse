@@ -56,23 +56,25 @@ export default async function SignalsPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Signals</h1>
-        <p className="text-muted-foreground">
+        <h1 className="font-serif text-2xl font-bold tracking-tight">
+          Signals
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Raised by the rules engine for your school, most severe first. The
           decision on every signal is yours — nothing is actioned
           automatically.
         </p>
       </div>
 
-      <nav className="flex gap-1 border-b">
+      <nav className="flex gap-1 border-b" aria-label="Signal status">
         {STATUSES.map((tab) => (
           <Link
             key={tab}
             href={`/dashboard/signals${tab === "OPEN" ? "" : `?status=${tab.toLowerCase()}`}`}
             className={
               tab === status
-                ? "border-b-2 border-primary px-3 py-2 text-sm font-medium"
-                : "px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                ? "border-b-2 border-primary px-3 py-3 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                : "px-3 py-3 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             }
           >
             {TAB_LABELS[tab]}
@@ -92,19 +94,19 @@ export default async function SignalsPage({
           </CardHeader>
         </Card>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-2">
           {signals.map((signal) => (
             <li key={signal.id}>
               <Link
                 href={`/dashboard/signals/${signal.id}`}
-                className="block rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-accent"
+                className="block rounded-lg border bg-card px-4 py-3 shadow-sm transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <span className="font-medium">
+                    <span className="font-bold">
                       {signal.pupil.firstName} {signal.pupil.lastName}
                     </span>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm tabular-nums text-muted-foreground">
                       Year {signal.pupil.yearGroup} ·{" "}
                       {signal.pupil.registrationGroup}
                     </span>
@@ -113,7 +115,7 @@ export default async function SignalsPage({
                 </div>
                 <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span>{signal.title}</span>
-                  <span className="text-muted-foreground">
+                  <span className="tabular-nums text-muted-foreground">
                     {signal.rule.name} · updated{" "}
                     {signal.updatedAt.toLocaleDateString("en-GB")}
                   </span>

@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { createTRPCRouter, tenantProcedure } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
+import { generateNarrative } from "@/server/narrative/generate";
+import { getNarrativeModel } from "@/server/narrative/model-provider";
 import { decideSignal } from "@/server/signals/decide";
 
 const STATUSES = ["OPEN", "CONFIRMED", "DISMISSED", "ESCALATED"] as const;
@@ -110,8 +112,25 @@ export const signalsRouter = createTRPCRouter({
       });
       const usersById = new Map(users.map((u) => [u.id, u]));
 
+      // Latest AI narrative, if one has been generated (advisory, labelled).
+      const narrative = await ctx.tenantDb.signalNarrative.findFirst({
+        where: { signalId: signal.id },
+        orderBy: { createdAt: "desc" },
+      });
+
       return {
         ...signal,
+        narrative: narrative
+          ? {
+              id: narrative.id,
+              content: narrative.content,
+              aiGenerated: narrative.aiGenerated,
+              promptKey: narrative.promptKey,
+              promptVersion: narrative.promptVersion,
+              modelId: narrative.modelId,
+              createdAt: narrative.createdAt,
+            }
+          : null,
         decisions: decisions.map((decision) => ({
           id: decision.id,
           kind: decision.kind,
@@ -142,6 +161,19 @@ export const signalsRouter = createTRPCRouter({
         signalId: input.signalId,
         kind: input.kind,
         note: input.note ?? null,
+      }),
+    ),
+
+  // AI advisory narrative for a CONFIRMED signal. Server-side Bedrock
+  // (eu-west-2) on pseudonymised data; every call audited with prompt and
+  // model versions. Output is advisory only and cannot change signal state.
+  generateNarrative: tenantProcedure
+    .input(z.object({ signalId: z.string().min(1) }))
+    .mutation(({ ctx, input }) =>
+      generateNarrative(ctx.tenantDb, getNarrativeModel(), {
+        tenantId: ctx.tenantId,
+        userId: ctx.session.user.id,
+        signalId: input.signalId,
       }),
     ),
 });

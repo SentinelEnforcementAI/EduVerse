@@ -55,8 +55,10 @@ export default async function AuditPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
-        <p className="text-muted-foreground">
+        <h1 className="font-serif text-2xl font-bold tracking-tight">
+          Audit log
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Every read and write against a child&apos;s record: who, what, when.
           Entries are permanent — they can never be edited or deleted, and
           viewing this log is itself recorded.
@@ -68,8 +70,8 @@ export default async function AuditPage({
           href={auditUrl(0)}
           className={
             !action
-              ? "rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground"
-              : "rounded-full border px-3 py-1 text-muted-foreground hover:text-foreground"
+              ? "rounded-full bg-primary px-4 py-2.5 font-bold tabular-nums text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              : "rounded-full border px-4 py-2.5 tabular-nums text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           }
         >
           All ({result.total})
@@ -80,8 +82,8 @@ export default async function AuditPage({
             href={auditUrl(0, availableAction)}
             className={
               action === availableAction
-                ? "rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground"
-                : "rounded-full border px-3 py-1 text-muted-foreground hover:text-foreground"
+                ? "rounded-full bg-primary px-4 py-2.5 font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                : "rounded-full border px-4 py-2.5 text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             }
           >
             {availableAction}
@@ -89,6 +91,8 @@ export default async function AuditPage({
         ))}
       </div>
 
+      {/* Audit entries are deliberately boring (DESIGN.md): plain Lato at
+          12/14, no status colour, no drama. */}
       <Card>
         <CardContent className="pt-6">
           {result.events.length === 0 ? (
@@ -98,25 +102,23 @@ export default async function AuditPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">When</th>
-                    <th className="py-2 pr-4 font-medium">Who</th>
-                    <th className="py-2 pr-4 font-medium">Action</th>
-                    <th className="py-2 pr-4 font-medium">Pupil</th>
-                    <th className="py-2 font-medium">Detail</th>
+                    <th className="py-3 pr-4 font-bold">When</th>
+                    <th className="py-3 pr-4 font-bold">Who</th>
+                    <th className="py-3 pr-4 font-bold">Action</th>
+                    <th className="py-3 pr-4 font-bold">Pupil</th>
+                    <th className="py-3 font-bold">Detail</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.events.map((event) => (
                     <tr key={event.id} className="border-b last:border-0">
-                      <td className="whitespace-nowrap py-2 pr-4 text-muted-foreground">
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums text-muted-foreground">
                         {event.createdAt.toLocaleString("en-GB")}
                       </td>
-                      <td className="py-2 pr-4">{event.user}</td>
-                      <td className="py-2 pr-4 font-mono text-xs">
-                        {event.action}
-                      </td>
-                      <td className="py-2 pr-4">{event.pupil ?? "—"}</td>
-                      <td className="py-2 text-xs text-muted-foreground">
+                      <td className="py-3 pr-4">{event.user}</td>
+                      <td className="py-3 pr-4 text-xs">{event.action}</td>
+                      <td className="py-3 pr-4">{event.pupil ?? "—"}</td>
+                      <td className="py-3 text-xs text-muted-foreground">
                         {event.metadata
                           ? JSON.stringify(event.metadata)
                           : event.entityId ?? ""}
@@ -140,7 +142,7 @@ export default async function AuditPage({
             Previous
           </Button>
         )}
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm tabular-nums text-muted-foreground">
           Page {page + 1} of {lastPage + 1}
         </span>
         {page < lastPage ? (
