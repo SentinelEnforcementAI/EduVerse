@@ -21,7 +21,7 @@ Status colour discipline:
 ## Surfaces
 - White cards on paper background, 1px cloud borders, 8-12px radius, shadows minimal or none (mocks use borders, not shadows — follow that).
 - Sidebar: white, cobalt tint (#3157FF at ~8%) for active item with cobalt text/icon.
-- Dark surfaces (ink) reserved for auth screens, app icon contexts, and marketing — the working app stays light.
+- Light surfaces throughout the product — auth and landing included (founder direction, 22/07/2026: the brand kit supersedes; light, modern, high-end). Dark ink is reserved for the app icon and marketing decks only.
 
 ## Typography
 - Single sans throughout (Inter or the geometric sans in the brand lockup — founder to confirm; default Inter). Playfair Display is retired from product UI.
