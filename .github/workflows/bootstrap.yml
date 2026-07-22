@@ -139,9 +139,19 @@ jobs:
             --query 'tasks[0].taskArn' --output text)
           echo "$NAME task: $ARN"
           aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$ARN"
+          TASK_ID="${ARN##*/}"
           EXIT=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$ARN" \
             --query 'tasks[0].containers[0].exitCode' --output text)
-          [ "$EXIT" = "0" ] || { echo "$NAME failed (exit $EXIT) — see /ecs/$PROJECT/worker logs"; exit 1; }
+          REASON=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$ARN" \
+            --query 'tasks[0].stoppedReason' --output text)
+          echo "--- $NAME container logs ---"
+          aws logs get-log-events \
+            --log-group-name "/ecs/$PROJECT/worker" \
+            --log-stream-name "migrate/migrate/$TASK_ID" \
+            --limit 100 --query 'events[].message' --output text 2>/dev/null \
+            || echo "(no log stream — container may not have started: $REASON)"
+          echo "--- end logs ---"
+          [ "$EXIT" = "0" ] || { echo "$NAME failed (exit $EXIT; $REASON)"; exit 1; }
           SCRIPT
           chmod +x /tmp/run_task.sh
 
