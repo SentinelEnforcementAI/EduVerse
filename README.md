@@ -141,11 +141,18 @@ The dashboard's "Data sync" card shows each job's outcome. Syncs are
 idempotent — running them again is always safe. Sentinel Watch only ever
 reads from Wonde; it never writes back to the school's MIS.
 
+The worker also runs the risk engine on a schedule: a debounced run fires
+shortly after each successful sync (so several sync types landing together
+produce one evaluation over the freshest data), and a nightly sweep at
+02:00 UTC re-evaluates every school even on days with no sync.
+
 The real Downlands and Patcham connections happen only after signed DPAs.
 
 ## Running the risk engine
 
-With the synthetic data seeded:
+The engine runs automatically when the worker is up (after each sync, plus
+the nightly sweep — see above). To run it manually with the synthetic data
+seeded:
 
 ```bash
 pnpm rules --tenant downlands

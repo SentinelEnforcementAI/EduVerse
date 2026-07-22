@@ -151,6 +151,9 @@ importers:
       '@sentinel/db':
         specifier: workspace:*
         version: link:../db
+      '@sentinel/rules':
+        specifier: workspace:*
+        version: link:../rules
       bullmq:
         specifier: ^5.66.5
         version: 5.80.9
