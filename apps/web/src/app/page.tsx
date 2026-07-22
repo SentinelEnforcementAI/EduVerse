@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BrandLockup } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { getAuthSession } from "@/server/auth/session";
 
@@ -9,8 +10,12 @@ export default async function Home() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center">
       <div className="flex flex-col items-center gap-4">
-        <h1 className="font-serif text-2xl font-bold tracking-tight">
-          Sentinel Watch
+        <h1>
+          <BrandLockup
+            markVariant="cobalt"
+            wordmarkClassName="text-2xl font-semibold"
+            className="gap-3"
+          />
         </h1>
         <p className="max-w-md text-base text-muted-foreground">
           Safeguarding intelligence for UK schools and Multi-Academy Trusts.

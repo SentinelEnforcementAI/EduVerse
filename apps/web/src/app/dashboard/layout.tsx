@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { dbForTenant } from "@sentinel/db";
 
+import { BrandLockup } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { getAuthSession } from "@/server/auth/session";
 
@@ -37,7 +38,7 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen">
       <aside className="flex w-60 shrink-0 flex-col bg-forest-deep text-cream">
         <div className="px-6 pb-6 pt-8">
-          <div className="font-serif text-xl font-bold">Sentinel Watch</div>
+          <BrandLockup markVariant="cobalt" wordmarkClassName="text-cream" />
           <div className="mt-1 text-xs text-cream/70">
             {tenant ? tenant.name : "No school assigned yet"}
           </div>
