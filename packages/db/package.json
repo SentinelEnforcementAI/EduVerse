@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
-    "user:add": "dotenv -e ../../.env -- tsx scripts/user-add.ts"
+    "user:add": "dotenv -e ../../.env -- tsx scripts/user-add.ts",
+    "db:deploy:prod": "prisma migrate deploy",
+    "user:add:prod": "tsx scripts/user-add.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2"

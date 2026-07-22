@@ -1,0 +1,90 @@
+# Manual deploy to AWS eu-west-2 (ECS Fargate). Trigger from the Actions tab
+# once the infrastructure exists (see infra/README.md).
+#
+# Required repository configuration:
+#   secret  AWS_DEPLOY_ROLE_ARN — IAM role assumable via GitHub OIDC, with
+#           permission to push to ECR, register task definitions, run the
+#           migrate task, and update the two ECS services.
+#
+# CTO-DECISION: automatic deploys on merge to main. Manual dispatch is the
+# simplest safe version while the platform has no staging environment.
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Build, migrate, release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f apps/web/Dockerfile \
+            -t "$REGISTRY/$PROJECT/web:$TAG" -t "$REGISTRY/$PROJECT/web:latest" .
+          docker build -f Dockerfile.worker \
+            -t "$REGISTRY/$PROJECT/worker:$TAG" -t "$REGISTRY/$PROJECT/worker:latest" .
+          docker push --all-tags "$REGISTRY/$PROJECT/web"
+          docker push --all-tags "$REGISTRY/$PROJECT/worker"
+
+      - name: Run database migrations (one-off task, owner role)
+        run: |
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=$PROJECT-private-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=$PROJECT-worker-*" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$PROJECT" \
+            --task-definition "$PROJECT-migrate" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' --output text)
+
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migrations failed (exit $EXIT_CODE) — check /ecs/$PROJECT/worker logs (migrate prefix)"
+            exit 1
+          fi
+
+      - name: Release services
+        run: |
+          aws ecs update-service --cluster "$PROJECT" --service web \
+            --force-new-deployment >/dev/null
+          aws ecs update-service --cluster "$PROJECT" --service worker \
+            --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "$PROJECT" --services web worker
+          echo "Deployed $GITHUB_SHA"
