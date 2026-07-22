@@ -54,10 +54,8 @@
 }
 
 @theme inline {
-  /* Single sans throughout (Inter). Playfair Display is retired; font-serif
-   * is aliased to the sans until the screen pass removes its last uses. */
+  /* Single sans throughout (Inter). */
   --font-sans: var(--font-inter);
-  --font-serif: var(--font-inter);
 
   /* Type scale (DESIGN.md v2): 12 metadata / 13 table body / 14 body /
    * 16 card titles / 20 section / 28 page title / 32 top of KPI range. */
@@ -115,16 +113,6 @@
   --color-warning-tint: var(--warning-tint);
   --color-success: var(--success-green);
   --color-success-tint: var(--success-tint);
-
-  /* v1 compatibility aliases so screens keep rendering between the token PR
-   * and the screen-pass PR. Removed in the screen pass — do not add uses. */
-  --color-forest-deep: var(--ink);
-  --color-forest: var(--cobalt);
-  --color-cream: var(--paper);
-  --color-slate: var(--ink-muted);
-  --color-signal: var(--warning-tint);
-  --color-signal-soft: var(--cloud);
-  --color-signal-foreground: var(--ink);
 }
 
 @layer base {

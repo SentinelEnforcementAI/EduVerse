@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TRPCError } from "@trpc/server";
 
+import { PupilAvatar } from "@/components/pupil-avatar";
 import { SeverityBadge } from "@/components/severity-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,23 +56,30 @@ export default async function SignalDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Quiet pupil header (DESIGN.md): name and facts, no visual drama —
-          the signal carries the urgency, not the child's identity. */}
+      {/* Pupil header: initials avatar (no photographs of children —
+          DESIGN.md v2), name and facts; the signal carries the urgency. */}
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="font-serif text-2xl font-bold tracking-tight">
-              {signal.pupil.firstName} {signal.pupil.lastName}
-            </h1>
-            <SeverityBadge severity={signal.severity} />
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
-              {signal.status.toLowerCase()}
-            </span>
+        <div className="flex items-center gap-4">
+          <PupilAvatar
+            firstName={signal.pupil.firstName}
+            lastName={signal.pupil.lastName}
+            className="size-12 text-lg"
+          />
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {signal.pupil.firstName} {signal.pupil.lastName}
+              </h1>
+              <SeverityBadge severity={signal.severity} />
+              <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+                {signal.status.toLowerCase()}
+              </span>
+            </div>
+            <p className="mt-1 text-sm tabular-nums text-muted-foreground">
+              Year {signal.pupil.yearGroup} · {signal.pupil.registrationGroup}{" "}
+              · UPN {signal.pupil.upn}
+            </p>
           </div>
-          <p className="mt-1 text-sm tabular-nums text-muted-foreground">
-            Year {signal.pupil.yearGroup} · {signal.pupil.registrationGroup} ·
-            UPN {signal.pupil.upn}
-          </p>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link href="/dashboard/signals">Back to signals</Link>
@@ -90,7 +98,7 @@ export default async function SignalDetailPage({
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div>
-            <h2 className="mb-1 text-sm font-bold">Why this fired</h2>
+            <h2 className="mb-1 text-base font-medium">Why this fired</h2>
             <p className="text-sm text-muted-foreground">
               {reasoning.summary ?? "No summary recorded."}
             </p>
@@ -98,7 +106,7 @@ export default async function SignalDetailPage({
 
           {reasoning.metrics ? (
             <div>
-              <h2 className="mb-2 text-sm font-bold">The numbers behind it</h2>
+              <h2 className="mb-2 text-base font-medium">The numbers behind it</h2>
               <dl className="grid gap-x-8 gap-y-1 text-sm sm:grid-cols-2">
                 {Object.entries(reasoning.metrics).map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-4">
@@ -112,7 +120,7 @@ export default async function SignalDetailPage({
 
           {reasoning.dataPoints && reasoning.dataPoints.length > 0 ? (
             <div>
-              <h2 className="mb-2 text-sm font-bold">Underlying records</h2>
+              <h2 className="mb-2 text-base font-medium">Underlying records</h2>
               <ul className="flex flex-col gap-1 text-sm">
                 {reasoning.dataPoints.map((point, index) => (
                   <li
@@ -143,15 +151,15 @@ export default async function SignalDetailPage({
       ) : null}
 
       {signal.status === "CONFIRMED" ? (
-        /* AI narrative treatment (DESIGN.md): visually distinct from system
-           facts — slate left border, explicit label, muted framing. Amber is
-           reserved for signals, so it never appears here. */
+        /* AI narrative treatment (DESIGN.md v2): visually distinct from
+           system facts — cloud left border, explicit "AI-generated ·
+           advisory" label, muted framing. Never styled as system fact. */
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               AI summary
-              <span className="rounded-full border border-slate/40 px-2.5 py-0.5 text-xs font-normal text-muted-foreground">
-                AI-generated, advisory
+              <span className="rounded-full border border-cloud px-2.5 py-0.5 text-xs font-normal text-muted-foreground">
+                AI-generated · advisory
               </span>
             </CardTitle>
             <CardDescription>
@@ -162,12 +170,12 @@ export default async function SignalDetailPage({
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {signal.narrative ? (
-              <div className="flex flex-col gap-2 border-l-2 border-slate pl-4">
+              <div className="flex flex-col gap-2 border-l-2 border-cloud pl-4">
                 <p className="whitespace-pre-wrap text-sm">
                   {signal.narrative.content}
                 </p>
                 <p className="text-xs tabular-nums text-muted-foreground">
-                  AI-generated, advisory · generated{" "}
+                  AI-generated · advisory · generated{" "}
                   {signal.narrative.createdAt.toLocaleString("en-GB")} · model{" "}
                   {signal.narrative.modelId} · prompt{" "}
                   {signal.narrative.promptKey} v{signal.narrative.promptVersion}
@@ -196,7 +204,7 @@ export default async function SignalDetailPage({
               {signal.decisions.map((decision) => (
                 <li key={decision.id} className="flex flex-col gap-0.5">
                   <span className="tabular-nums">
-                    <span className="font-bold">
+                    <span className="font-medium">
                       {DECISION_LABELS[decision.kind]}
                     </span>{" "}
                     by {decision.decidedBy} on{" "}
