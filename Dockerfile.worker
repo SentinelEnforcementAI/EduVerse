@@ -5,7 +5,10 @@ FROM node:22-slim
 # Prisma's engines need OpenSSL, which slim images do not ship.
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-RUN corepack enable pnpm
+# Bake pnpm into a world-readable corepack cache at build time — the
+# runtime user has no writable home, so corepack must never download.
+ENV COREPACK_HOME=/opt/corepack
+RUN corepack enable pnpm && corepack install --global pnpm@10.33.0
 WORKDIR /repo
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -17,7 +20,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter @sentinel/db db:generate
 
-RUN groupadd --system app && useradd --system --gid app app
+RUN groupadd --system app && useradd --system --gid app --create-home app
 USER app
 ENV NODE_ENV=production
 # Full workspace kept on purpose: the same image runs one-off tasks —
