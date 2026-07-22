@@ -183,11 +183,20 @@ const isDirectRun =
 if (isDirectRun) {
   seedDatabase({ log: console.info })
     .then(async (summary) => {
+      // The manifest is a dev convenience (which pupils carry which risk
+      // pattern). Best-effort: in containers the code directory is
+      // read-only, and a missing manifest must not fail the seed.
       const manifestPath = path.join(
         path.dirname(fileURLToPath(import.meta.url)),
         "seed-manifest.json",
       );
-      writeFileSync(manifestPath, JSON.stringify(summary, null, 2));
+      let manifestWritten = true;
+      try {
+        writeFileSync(manifestPath, JSON.stringify(summary, null, 2));
+      } catch {
+        manifestWritten = false;
+        console.warn("seed-manifest.json not written (read-only filesystem)");
+      }
 
       for (const school of summary.schools) {
         console.info(
@@ -201,7 +210,9 @@ if (isDirectRun) {
         }
       }
       console.info(
-        `\nEmbedded risk pupils written to ${manifestPath}` +
+        (manifestWritten
+          ? `\nEmbedded risk pupils written to ${manifestPath}`
+          : "") +
           `\nSign in locally as dsl@downlands.example or dsl@patcham.example`,
       );
       await systemDb.$disconnect();
