@@ -10,6 +10,7 @@ import {
   type RiskPattern,
   type SchoolConfig,
 } from "../src/synthetic/generator";
+import { seedHeroCases } from "./seed-cases";
 import { seedDocuments } from "./seed-documents";
 
 // Seeds the two design-partner schools with synthetic pupils and 12 months
@@ -50,9 +51,15 @@ const DIRECTOR = {
   name: "Trust Director of Safeguarding",
 };
 
+// A fuller synthetic trust so the demo trust overview and cross-school views
+// are populated. Downlands and Patcham are the design-partner schools (CLAUDE.md);
+// the rest are invented for breadth. Downlands is the flagship for the hero cases.
 const SCHOOLS = [
-  { slug: "downlands", name: "Downlands", seed: 1001 },
-  { slug: "patcham", name: "Patcham", seed: 2002 },
+  { slug: "downlands", name: "Downlands", seed: 1001, flagship: true },
+  { slug: "patcham", name: "Patcham", seed: 2002, flagship: false },
+  { slug: "coastdown", name: "Coastdown Academy", seed: 3003, flagship: false },
+  { slug: "meridian", name: "Meridian High", seed: 4004, flagship: false },
+  { slug: "ashgrove", name: "Ashgrove Primary", seed: 5005, flagship: false },
 ];
 
 const CHUNK = 100;
@@ -222,6 +229,10 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedSumma
       }
       log(`${school.name}: seeded ${start + count}/${pupilsPerSchool} pupils`);
     }
+
+    // Hand-crafted hero cases (the flagship school also gets the serious
+    // Level 4 disclosure that drives the reveal and referral demo).
+    await seedHeroCases(tenant.id, { flagship: school.flagship });
 
     summary.schools.push({
       slug: school.slug,

@@ -14,14 +14,16 @@ const OPTIONS = {
 };
 
 describe("seedDatabase", () => {
-  it("seeds both schools and is idempotent on re-run", async () => {
+  it("seeds the trust's schools and is idempotent on re-run", async () => {
     await seedDatabase(OPTIONS);
     const summary = await seedDatabase(OPTIONS);
 
-    expect(summary.schools.map((s) => s.slug)).toEqual([
-      "downlands",
-      "patcham",
-    ]);
+    // The design-partner schools lead the synthetic trust; more are seeded for
+    // demo breadth.
+    const slugs = summary.schools.map((s) => s.slug);
+    expect(slugs).toContain("downlands");
+    expect(slugs).toContain("patcham");
+    expect(slugs.length).toBeGreaterThanOrEqual(2);
 
     const sessionCount = schoolDays(OPTIONS.anchorDate, OPTIONS.months).length * 2;
     for (const school of summary.schools) {

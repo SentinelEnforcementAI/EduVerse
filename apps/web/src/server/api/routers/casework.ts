@@ -82,7 +82,14 @@ export const TRIAGE_META: Record<
 type SignalReasoning = {
   summary: string;
   metrics: Record<string, number | string>;
-  dataPoints: { label: string; date?: string; value: string | number }[];
+  // src is optional per data point: rule-generated signals share one source
+  // domain, but a hand-crafted cross-domain case can attribute each entry.
+  dataPoints: {
+    label: string;
+    date?: string;
+    value?: string | number;
+    src?: string;
+  }[];
 };
 
 // A sealed triage row: no name, no numeric severity — a sealed reference, the
@@ -105,7 +112,7 @@ async function triageRows(
     ref: sealPupilRef(signal.pupil.upn),
     yearGroup: signal.pupil.yearGroup,
     headline: signal.title,
-    level: escalationLevel(signal.severity),
+    level: escalationLevel(signal.severity, signal.serious),
     confidence: confidenceBand(signal.severity),
     status: signal.status,
   }));
@@ -199,7 +206,7 @@ export const caseworkRouter = createTRPCRouter({
       }
 
       const reasoning = signal.reasoning as SignalReasoning;
-      const level = escalationLevel(signal.severity);
+      const level = escalationLevel(signal.severity, signal.serious);
       const source = sourceForRule(signal.ruleVersion.key);
 
       // Time to surface (spec 5.5, method documented): the interval between the
@@ -339,7 +346,7 @@ export const caseworkRouter = createTRPCRouter({
         timeline: reasoning.dataPoints.map((p) => ({
           date: p.date ?? null,
           label: p.label,
-          source,
+          source: p.src ?? source,
         })),
         linked: siblings.map((s) => ({ id: s.id, headline: s.title })),
         notes: notes.map((n) => ({
@@ -436,10 +443,10 @@ export const caseworkRouter = createTRPCRouter({
       );
       const signal = await db.signal.findUnique({
         where: { id: input.signalId },
-        select: { id: true, severity: true, pupilId: true },
+        select: { id: true, severity: true, pupilId: true, serious: true },
       });
       if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!isRevealable(escalationLevel(signal.severity))) {
+      if (!isRevealable(escalationLevel(signal.severity, signal.serious))) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message:
@@ -596,7 +603,7 @@ export const caseworkRouter = createTRPCRouter({
         timeline: reasoning.dataPoints.map((p) => ({
           date: p.date ?? null,
           label: p.label,
-          source,
+          source: p.src ?? source,
         })),
         overall: reasoning.summary,
       };
@@ -702,7 +709,7 @@ export const caseworkRouter = createTRPCRouter({
       );
       const signal = await db.signal.findUnique({
         where: { id: input.signalId },
-        select: { id: true, pupilId: true, severity: true },
+        select: { id: true, pupilId: true, severity: true, serious: true },
       });
       if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -711,7 +718,7 @@ export const caseworkRouter = createTRPCRouter({
       });
       if (existing > 0) return { opened: true, created: 0 };
 
-      const level = escalationLevel(signal.severity);
+      const level = escalationLevel(signal.severity, signal.serious);
       const labels = [
         ...LEVEL_META[level].route,
         "Record the outcome and set a review date",
@@ -856,10 +863,10 @@ export const caseworkRouter = createTRPCRouter({
       );
       const signal = await db.signal.findUnique({
         where: { id: input.signalId },
-        select: { id: true, pupilId: true, severity: true },
+        select: { id: true, pupilId: true, severity: true, serious: true },
       });
       if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!isRevealable(escalationLevel(signal.severity))) {
+      if (!isRevealable(escalationLevel(signal.severity, signal.serious))) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "This case is not at the threshold for a referral.",

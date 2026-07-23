@@ -392,6 +392,9 @@ model Signal {
   executionId   String       @map("execution_id")
   status        SignalStatus @default(OPEN)
   severity      Int
+  // A signal flagged serious (e.g. a disclosure) is escalation level 4 and
+  // revealable regardless of the numeric severity (spec section 7).
+  serious       Boolean      @default(false)
   title         String
   reasoning     Json
   windowStart   DateTime     @map("window_start") @db.Date
