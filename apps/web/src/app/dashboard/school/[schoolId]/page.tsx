@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardCheck, ClipboardList, Timer, Users } from "lucide-react";
+import { ClipboardList, Flag, Timer, Users } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -13,6 +13,7 @@ import { CaseloadBar } from "../../shell/caseload-bar";
 import { KpiCard } from "../../shell/kpi";
 import { LevelChip } from "../../shell/level-chip";
 import { ReportPanel } from "../../shell/report-panel";
+import { Sparkline } from "../../shell/sparkline";
 
 // School overview (spec 5.2): the DSL's home screen, and where a director lands
 // when they drill into a school. KPI cards, then the current pattern list.
@@ -101,32 +102,46 @@ export default async function SchoolOverviewPage({
           label="Pupils on roll"
           value={data.metrics.pupilsOnRoll}
           icon={Users}
+          footer="On roll this term"
         />
         <KpiCard
           label="Active concerns"
           value={data.metrics.activeConcerns}
           href={`/dashboard/school/${data.school.id}/triage/active`}
-          icon={ClipboardCheck}
+          icon={Flag}
+          footer={`${data.metrics.byLevel[3] + data.metrics.byLevel[4]} at action threshold`}
         />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
           href={`/dashboard/school/${data.school.id}/triage/awaiting`}
           icon={Timer}
+          footer="Needs a DSL decision"
         />
         <KpiCard
           label="Reviewed this term"
           value={data.metrics.reviewed}
           icon={ClipboardList}
+          footer="Confirmed, escalated or closed"
         />
       </div>
 
       <Card className="mt-4 p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold">Caseload by escalation level</h2>
-          <span className="text-sm text-muted-foreground">
-            {data.metrics.activeConcerns} active concerns
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">
+              Caseload by escalation level
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {data.metrics.activeConcerns} active concerns
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Behaviour, 12-month trend
+            </span>
+            <Sparkline data={data.metrics.trend} width={120} height={32} />
+          </div>
         </div>
         <CaseloadBar byLevel={data.metrics.byLevel} className="mt-4" />
       </Card>

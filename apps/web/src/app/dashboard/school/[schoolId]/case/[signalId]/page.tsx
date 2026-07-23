@@ -6,6 +6,7 @@ import {
   Clock,
   FolderOpen,
   Link2,
+  Network,
   ScrollText,
   Send,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import { serverApi } from "@/trpc/server";
 import { Breadcrumbs } from "../../../../shell/breadcrumbs";
 import { LevelChip } from "../../../../shell/level-chip";
 import {
+  CaseMenu,
   DismissForm,
   NoteForm,
   RevealControl,
@@ -111,6 +113,10 @@ export default async function CaseViewPage({
                   label: "Safeguarding overview",
                   href: `/dashboard/school/${schoolId}`,
                 },
+                {
+                  label: "Concerns",
+                  href: `/dashboard/school/${schoolId}/triage/active`,
+                },
                 { label: c.ref },
               ]
         }
@@ -135,7 +141,7 @@ export default async function CaseViewPage({
             {formatDate(c.window.end)}
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           {c.revealed ? null : c.revealable ? (
             <RevealControl
               signalId={c.signalId}
@@ -145,6 +151,7 @@ export default async function CaseViewPage({
           ) : (
             <SealedNotice />
           )}
+          <CaseMenu />
         </div>
       </div>
 
@@ -173,13 +180,23 @@ export default async function CaseViewPage({
               Each indicator, with the source it came from. Every entry traces to
               an underlying record.
             </p>
-            <ul className="mt-4 flex flex-col gap-3">
+            <ol className="mt-4">
               {c.timeline.map((entry, i) => (
                 <li key={i} className="flex gap-3">
-                  <div className="w-20 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
+                  <div className="w-16 shrink-0 pt-px text-xs tabular-nums text-muted-foreground">
                     {formatDay(entry.date)}
                   </div>
-                  <div className="min-w-0 flex-1 border-l border-cloud pb-1 pl-3">
+                  {/* Rail: a cobalt node per entry, joined by a hairline. */}
+                  <div className="flex flex-col items-center">
+                    <span
+                      className="mt-1 size-2.5 shrink-0 rounded-full border-2 border-cobalt bg-card"
+                      aria-hidden
+                    />
+                    {i < c.timeline.length - 1 ? (
+                      <span className="w-px flex-1 bg-cloud" aria-hidden />
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 flex-1 pb-5">
                     <div className="text-xs font-medium uppercase tracking-wide text-cobalt">
                       {entry.source}
                     </div>
@@ -187,18 +204,28 @@ export default async function CaseViewPage({
                   </div>
                 </li>
               ))}
-            </ul>
+            </ol>
           </section>
 
           <section>
             <h2 className="text-xl font-semibold">Risk interpretation</h2>
             <Card className="mt-3 p-5">
-              <div className="text-xs font-medium uppercase tracking-wide text-cobalt">
-                {c.interpretation.source} · {c.interpretation.rule}
+              <div className="flex gap-4">
+                <span
+                  className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-cobalt-tint text-cobalt sm:flex"
+                  aria-hidden
+                >
+                  <Network className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium uppercase tracking-wide text-cobalt">
+                    {c.interpretation.source} · {c.interpretation.rule}
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed">
+                    {c.interpretation.summary}
+                  </p>
+                </div>
               </div>
-              <p className="mt-2 text-sm leading-relaxed">
-                {c.interpretation.summary}
-              </p>
               <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {Object.entries(c.interpretation.metrics).map(([k, v]) => (
                   <div key={k}>

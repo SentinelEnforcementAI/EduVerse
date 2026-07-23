@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, ClipboardCheck, Timer, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  ChevronRight,
+  Flag,
+  Network,
+  Timer,
+  Users,
+} from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -11,6 +19,8 @@ import { serverApi } from "@/trpc/server";
 import { CaseloadBar } from "../shell/caseload-bar";
 import { KpiCard, MiniStat } from "../shell/kpi";
 import { ReportPanel } from "../shell/report-panel";
+import { RiskPill } from "../shell/risk-pill";
+import { Sparkline } from "../shell/sparkline";
 
 // Trust overview (spec 5.1): the trust safeguarding picture and where to look
 // first. Trust KPI rollup, then a school-level grid that drills into each
@@ -78,37 +88,64 @@ export default async function TrustOverviewPage() {
           label="Schools in trust"
           value={data.metrics.schools}
           icon={Building2}
+          footer={
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-success" aria-hidden />
+              All schools active
+            </span>
+          }
         />
         <KpiCard
           label="Pupils on roll"
-          value={data.metrics.pupilsOnRoll}
+          value={data.metrics.pupilsOnRoll.toLocaleString("en-GB")}
           icon={Users}
+          footer={`Across ${data.metrics.schools} schools`}
         />
         <KpiCard
           label="Active concerns"
           value={data.metrics.activeConcerns}
           href="/dashboard/trust/triage/active"
-          icon={ClipboardCheck}
+          icon={Flag}
+          footer={`${data.metrics.byLevel[3] + data.metrics.byLevel[4]} at action threshold`}
         />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
           href="/dashboard/trust/triage/awaiting"
           icon={Timer}
+          footer="Needs a DSL decision"
         />
       </div>
 
       <Card className="mt-4 p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold">Caseload by escalation level</h2>
-          <span className="text-sm text-muted-foreground">
-            {data.metrics.activeConcerns} active concerns across the trust
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">
+              Caseload by escalation level
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {data.metrics.activeConcerns} active concerns across the trust
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Behaviour, 12-month trend
+            </span>
+            <Sparkline data={data.metrics.trend} width={120} height={32} />
+          </div>
         </div>
         <CaseloadBar byLevel={data.metrics.byLevel} className="mt-4" />
       </Card>
 
-      <h2 className="mt-10 text-xl font-semibold">School-level view</h2>
+      <div className="mt-10 flex items-center justify-between">
+        <h2 className="text-xl font-semibold">School-level view</h2>
+        <Link
+          href="/dashboard/schools"
+          className="inline-flex items-center gap-1 text-sm font-medium text-cobalt hover:underline"
+        >
+          View all schools <ArrowRight className="size-4" aria-hidden />
+        </Link>
+      </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {data.schools.map((school) => (
           <Link
@@ -119,10 +156,13 @@ export default async function TrustOverviewPage() {
             <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
               <div className="flex items-start justify-between gap-2">
                 <span className="text-lg font-semibold">{school.name}</span>
-                <ChevronRight
-                  className="size-5 text-muted-foreground transition-colors group-hover:text-cobalt"
-                  aria-hidden
-                />
+                <div className="flex items-center gap-2">
+                  <RiskPill band={school.riskBand} />
+                  <ChevronRight
+                    className="size-5 text-muted-foreground transition-colors group-hover:text-cobalt"
+                    aria-hidden
+                  />
+                </div>
               </div>
               {school.dsl ? (
                 <div className="mt-0.5 text-sm text-muted-foreground">
@@ -135,6 +175,12 @@ export default async function TrustOverviewPage() {
                 <MiniStat label="To decide" value={school.awaitingDecision} />
               </div>
               <CaseloadBar byLevel={school.byLevel} className="mt-4" compact />
+              <div className="mt-4 flex items-center justify-between border-t border-cloud pt-3">
+                <span className="text-xs text-muted-foreground">
+                  Behaviour, 12-month trend
+                </span>
+                <Sparkline data={school.trend} />
+              </div>
             </Card>
           </Link>
         ))}
@@ -142,9 +188,17 @@ export default async function TrustOverviewPage() {
 
       {cohort.patterns.length > 0 ? (
         <>
-          <h2 className="mt-10 text-xl font-semibold">
-            Cross-school pattern intelligence
-          </h2>
+          <div className="mt-10 flex items-center justify-between">
+            <h2 className="text-xl font-semibold">
+              Cross-school pattern intelligence
+            </h2>
+            <Link
+              href="/dashboard/insights"
+              className="inline-flex items-center gap-1 text-sm font-medium text-cobalt hover:underline"
+            >
+              View all insights <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </div>
           <p className="mt-1 text-base text-muted-foreground">
             Concerns crossing school boundaries this period. What looks local at
             one school reads as a cohort pattern across the trust.
@@ -157,7 +211,10 @@ export default async function TrustOverviewPage() {
                 className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
-                  <div className="text-base font-semibold leading-snug">
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-cobalt-tint text-cobalt">
+                    <Network className="size-[18px]" aria-hidden />
+                  </span>
+                  <div className="mt-3 text-base font-semibold leading-snug">
                     {p.title}
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">

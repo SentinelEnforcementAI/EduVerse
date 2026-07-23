@@ -1,11 +1,85 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Eye, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Eye, Link as LinkIcon, Lock, MoreVertical, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
+
+// The case overflow menu: real, useful actions only (print the case, copy a
+// link to it). Never a set of dead affordances.
+export function CaseMenu() {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable — leave the menu open so the user can retry.
+    }
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex size-9 items-center justify-center rounded-lg border border-cloud text-muted-foreground transition-colors hover:border-ink hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <MoreVertical className="size-[18px]" aria-hidden />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-cloud bg-card py-1 shadow-lg"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              window.print();
+            }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-paper"
+          >
+            <Printer className="size-4 text-muted-foreground" aria-hidden />
+            Print case
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={copyLink}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-paper"
+          >
+            {copied ? (
+              <Check className="size-4 text-success" aria-hidden />
+            ) : (
+              <LinkIcon className="size-4 text-muted-foreground" aria-hidden />
+            )}
+            {copied ? "Link copied" : "Copy link"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const textareaClass =
   "w-full min-h-20 rounded-lg border border-cloud bg-card p-3 text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -157,14 +231,20 @@ export function NoteForm({
     );
   }
 
+  const NOTE_MAX = 1000;
+
   return (
     <div>
       <textarea
         className={textareaClass}
         placeholder="Add a note to this case…"
         value={body}
+        maxLength={NOTE_MAX}
         onChange={(e) => setBody(e.target.value)}
       />
+      <div className="mt-1 text-right text-xs tabular-nums text-muted-foreground">
+        {body.length} / {NOTE_MAX}
+      </div>
       {colleagues.length > 0 ? (
         <div className="mt-2">
           <span className="text-xs text-muted-foreground">Tag colleagues:</span>
