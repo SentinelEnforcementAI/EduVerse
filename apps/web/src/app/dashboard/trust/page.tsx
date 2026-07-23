@@ -48,12 +48,20 @@ export default async function TrustOverviewPage() {
             {data.trustName} · {data.metrics.schools} schools
           </p>
         </div>
-        <ReportPanel
-          triggerLabel="Termly governance report"
-          title="Termly governance report"
-          filename="termly-governance-report.txt"
-          content={report}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/trust/kcsie"
+            className="rounded-md border border-cloud px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-ink hover:text-ink"
+          >
+            KCSIE compliance
+          </Link>
+          <ReportPanel
+            triggerLabel="Termly governance report"
+            title="Termly governance report"
+            filename="termly-governance-report.txt"
+            content={report}
+          />
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

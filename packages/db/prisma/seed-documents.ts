@@ -110,6 +110,48 @@ Information is shared with children's social care, the police and other agencies
 
 The single central record holds the pre-employment and vetting checks for all staff and regular volunteers, including identity, right to work, DBS, prohibition and reference checks. It is maintained continuously and checked regularly against the requirements of KCSIE 2024 part three.`,
   },
+  {
+    key: "dsl-training",
+    title: "DSL Training Certificate",
+    type: "Training",
+    status: "Current",
+    date: "2025-03-01",
+    themes: ["training", "dsl", "kcsie"],
+    summary: "Designated Safeguarding Lead training, two-yearly. Renews March 2027.",
+    content: `TRAINING RECORD
+
+Course: Designated Safeguarding Lead training
+Renews March 2027
+
+Completed by the DSL in line with the two-yearly requirement of KCSIE 2024.`,
+  },
+  {
+    key: "staff-training",
+    title: "Whole-Staff Safeguarding Training",
+    type: "Training",
+    status: "Current",
+    date: "2025-09-01",
+    themes: ["training", "safeguarding", "kcsie"],
+    summary: "Annual whole-staff safeguarding training. Next due September 2026.",
+    content: `TRAINING RECORD
+
+Course: Whole-staff safeguarding training
+Renews September 2026
+
+Delivered to all staff at the start of the academic year, covering KCSIE 2024 part one.`,
+  },
+  {
+    key: "s175",
+    title: "Section 175 Self-Assessment",
+    type: "Return",
+    status: "Filed",
+    date: "2026-03-12",
+    themes: ["compliance", "return", "local authority", "section 175"],
+    summary: "Section 175 safeguarding self-assessment submitted to the local authority.",
+    content: `SECTION 175 SELF-ASSESSMENT
+
+The school's annual section 175 safeguarding self-assessment was completed and submitted to the local authority on 12 March 2026. It confirms arrangements are in place across the safeguarding standards.`,
+  },
 ];
 
 export async function seedDocuments(tenantId: string): Promise<number> {

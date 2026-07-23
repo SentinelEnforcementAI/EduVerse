@@ -67,6 +67,12 @@ export default async function SchoolOverviewPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
+            href={`/dashboard/school/${data.school.id}/kcsie`}
+            className="rounded-md border border-cloud px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-ink hover:text-ink"
+          >
+            KCSIE
+          </Link>
+          <Link
             href={`/dashboard/school/${data.school.id}/documents`}
             className="rounded-md border border-cloud px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-ink hover:text-ink"
           >

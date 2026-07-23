@@ -318,6 +318,34 @@ model ReferralEvent {
   @@map("referral_events")
 }
 
+// A task in a KCSIE component workspace (spec 5.13). component_key identifies
+// which of the seven components. Toggleable, so RLS grants UPDATE; no DELETE.
+model KcsieTask {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  componentKey String   @map("component_key")
+  label        String
+  done         Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, componentKey])
+  @@map("kcsie_tasks")
+}
+
+// Evidence attached to a KCSIE component (spec 5.13): a link to a vault
+// document. Append-only.
+model KcsieEvidence {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  componentKey String   @map("component_key")
+  documentId   String   @map("document_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, componentKey, documentId])
+  @@map("kcsie_evidence")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.
