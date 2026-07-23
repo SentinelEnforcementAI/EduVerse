@@ -143,6 +143,21 @@ export const caseworkRouter = createTRPCRouter({
       };
     }),
 
+  // On-call (spec 5.16): the out-of-hours view. The highest-priority active
+  // cases across the caller's scope (level 3 and above), sealed. A director
+  // sees the whole trust; a DSL sees their school.
+  onCall: tenancyProcedure.query(async ({ ctx }) => {
+    const targets = ctx.tenancy.schools.map((s) => dbForSchool(ctx.tenancy, s.id));
+    const grouped = await Promise.all(
+      targets.map(({ school, db }) => triageRows(db, school, "active")),
+    );
+    const rows = grouped
+      .flat()
+      .filter((r) => r.level >= 3)
+      .sort((a, b) => b.level - a.level);
+    return { rows };
+  }),
+
   // Read-only case view (spec 5.5). Every explainability surface, identity
   // sealed by default (reveal is gated and lands with the HITL slice). The read
   // is audited against the pupil's record.

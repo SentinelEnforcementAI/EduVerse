@@ -34,9 +34,15 @@ export default async function DashboardLayout({
     : `DSL${tenancy.schools[0] ? `, ${tenancy.schools[0].name}` : ""}`;
 
   const dslSchoolId = tenancy.schools[0]?.id;
+  // On-call and governance serve both modes (on-call resolves the caller's
+  // scope; governance is system-wide).
+  const common: HeaderLink[] = [
+    { href: "/dashboard/oncall", label: "On-call" },
+    { href: "/dashboard/governance", label: "Governance" },
+  ];
   const links: HeaderLink[] =
     isDirector || !dslSchoolId
-      ? []
+      ? common
       : [
           {
             href: `/dashboard/school/${dslSchoolId}/triage/active`,
@@ -50,6 +56,7 @@ export default async function DashboardLayout({
             href: `/dashboard/school/${dslSchoolId}/inspection`,
             label: "Inspection",
           },
+          ...common,
           { href: "/dashboard/audit", label: "Audit log" },
         ];
 

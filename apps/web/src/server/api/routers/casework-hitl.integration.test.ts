@@ -379,3 +379,15 @@ describe("referral lifecycle", () => {
     expect(refs).toHaveLength(0);
   });
 });
+
+describe("on-call", () => {
+  it("shows only the highest-priority active cases, sealed", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    const data = await caller.casework.onCall();
+    // The level-3 case is on-call; the level-2 case is not.
+    expect(data.rows.some((r) => r.id === level3SignalId)).toBe(true);
+    expect(data.rows.some((r) => r.id === level2SignalId)).toBe(false);
+    expect(data.rows.every((r) => r.level >= 3)).toBe(true);
+    expect(data.rows.every((r) => r.ref.startsWith("Pupil "))).toBe(true);
+  });
+});
