@@ -46,6 +46,10 @@ export default async function DashboardLayout({
             href: `/dashboard/school/${dslSchoolId}/documents`,
             label: "Documents",
           },
+          {
+            href: `/dashboard/school/${dslSchoolId}/inspection`,
+            label: "Inspection",
+          },
           { href: "/dashboard/audit", label: "Audit log" },
         ];
 
