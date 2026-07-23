@@ -9,6 +9,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // "native" for local dev/CI; the Debian 12 target explicitly for the
+  // container images, so the engine choice never depends on what the
+  // Docker build stage happens to have installed.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
