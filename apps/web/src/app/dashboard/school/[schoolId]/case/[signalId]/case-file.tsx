@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CheckCircle2, Circle, FolderOpen } from "lucide-react";
+import { CalendarClock, CheckCircle2, Circle, FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
@@ -53,11 +53,17 @@ export function CaseFilePanel({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between text-sm">
+      <div className="mb-1.5 flex items-center justify-between text-sm">
         <span className="text-muted-foreground">
           {caseFile.done} of {caseFile.total} complete
         </span>
         <span className="font-semibold tabular-nums">{pct}%</span>
+      </div>
+      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-cloud">
+        <div
+          className="h-full rounded-full bg-cobalt transition-all"
+          style={{ width: `${pct}%` }}
+        />
       </div>
       <ul className="flex flex-col gap-1">
         {caseFile.tasks.map((task) => (
@@ -129,14 +135,23 @@ export function ReviewScheduler({
       {reviews.length > 0 ? (
         <ul className="mb-4 flex flex-col gap-2">
           {reviews.map((r) => (
-            <li key={r.id} className="rounded-md border border-cloud p-3 text-sm">
-              <div className="font-medium">{r.scheduledFor}</div>
-              {r.attendees.length > 0 ? (
-                <div className="text-xs text-muted-foreground">
-                  With {r.attendees.join(", ")}
-                </div>
-              ) : null}
-              {r.note ? <div className="mt-1 text-xs">{r.note}</div> : null}
+            <li
+              key={r.id}
+              className="flex gap-2.5 rounded-lg border border-cloud p-3 text-sm"
+            >
+              <CalendarClock
+                className="mt-0.5 size-4 shrink-0 text-cobalt"
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <div className="font-medium">{r.scheduledFor}</div>
+                {r.attendees.length > 0 ? (
+                  <div className="text-xs text-muted-foreground">
+                    With {r.attendees.join(", ")}
+                  </div>
+                ) : null}
+                {r.note ? <div className="mt-1 text-xs">{r.note}</div> : null}
+              </div>
             </li>
           ))}
         </ul>
