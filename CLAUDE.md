@@ -5,6 +5,12 @@ Sentinel Watch is a safeguarding intelligence platform for UK schools and Multi-
 
 This build targets the design partner MVP: two schools (Downlands, Patcham), real workflows, synthetic data until a signed DPA says otherwise.
 
+## Functional target
+FUNCTIONAL_SPEC.md defines what to build. reference/watch-demo.jsx is the working
+reference implementation and is the source of truth for behaviour, copy and flow.
+Read both in full before any slice. Parity with the reference is the definition of done.
+The reference hardcodes what production computes: see FUNCTIONAL_SPEC.md section 3.
+
 ## Non-negotiable principles
 1. **Human-in-the-loop is structural.** The system flags. Humans decide. No feature may auto-action anything consequential about a child. Every flag requires explicit DSL confirmation, dismissal, or escalation. This is enforced in code and schema, not UI copy.
 2. **UK data residency.** All data and inference stays in AWS London (eu-west-2). No pupil data leaves UK infrastructure. LLM calls via UK-resident endpoints only.
