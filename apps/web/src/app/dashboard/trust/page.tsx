@@ -28,6 +28,8 @@ export default async function TrustOverviewPage() {
     throw error;
   }
 
+  const cohort = await api.cohort.patterns();
+
   const report = buildTrustTermlyReport({
     trustName: data.trustName,
     generatedOn: new Date(),
@@ -115,6 +117,40 @@ export default async function TrustOverviewPage() {
           </Link>
         ))}
       </div>
+
+      {cohort.patterns.length > 0 ? (
+        <>
+          <h2 className="mt-10 text-xl font-semibold">
+            Cross-school pattern intelligence
+          </h2>
+          <p className="mt-1 text-base text-muted-foreground">
+            Concerns crossing school boundaries this period. What looks local at
+            one school reads as a cohort pattern across the trust.
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {cohort.patterns.map((p) => (
+              <Link
+                key={p.key}
+                href={`/dashboard/trust/cohort/${p.key}`}
+                className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
+                  <div className="text-base font-semibold leading-snug">
+                    {p.title}
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {p.detail}
+                  </div>
+                  <div className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-cobalt">
+                    Investigate
+                    <ChevronRight className="size-4" aria-hidden />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
