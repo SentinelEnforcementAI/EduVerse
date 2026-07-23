@@ -1,0 +1,155 @@
+# Sentinel Watch, demo walkthrough
+
+The hero path for an investor demo, screen by screen, with the line to say on
+each. Everything below is running software against a seeded database, not
+mockups. Screenshots in `screens/` were captured from the running app.
+
+## The one-liner
+
+Sentinel Watch is a safeguarding intelligence layer for UK schools and
+Multi-Academy Trusts. It reads the data schools already hold (attendance,
+behaviour, attainment, pastoral notes), connects the dots a busy DSL cannot,
+and surfaces the child who needs attention, with the reasoning attached, days
+before the next scheduled meeting would have caught it. The system flags;
+a human always decides.
+
+## The demo environment
+
+- **Weald Learning Trust**, five schools, 1,100 pupils, 101 active concerns.
+- Fully synthetic data with real risk patterns embedded, so nothing on screen
+  is a real child.
+- Two roles to switch between: a **Trust Director of Safeguarding** (sees the
+  whole trust) and a **school DSL** (sees only their own school). The role
+  boundary is enforced at the database, not just hidden in the UI.
+
+## Run it
+
+```bash
+# from the repo root, with Postgres running
+DEMO_PUPILS=220 DEMO_MONTHS=12 pnpm --filter @sentinel/db db:seed:demo
+pnpm --filter web build && pnpm --filter web start
+# open http://localhost:3000, sign in as director@weald-learning-trust.example
+```
+
+---
+
+## The walk
+
+### 1. Trust overview, the whole trust on one screen
+`screens/01-trust-overview.png`
+
+> "This is what the Director of Safeguarding for a five-school trust sees on
+> Monday morning. 1,100 pupils, 101 active concerns, 101 awaiting a decision.
+> Every number is a link into the underlying cases."
+
+Scroll to the bottom: **Cross-school pattern intelligence**.
+
+> "Here is the thing no single school can see. Watch looks across all five
+> schools and finds concerns that cross school boundaries, the same kind of
+> concern in the same year group in more than one school at once. A Year 8
+> attendance pattern that looks minor at each school individually reads as a
+> cohort issue across the trust."
+
+### 2. A cross-school pattern in detail
+`screens/03-cohort-detail.png`
+
+> "Click into one and Watch shows the by-school breakdown and what it
+> recommends: coordinate one response across the affected schools, and check
+> for a shared cause before treating five schools as five separate problems.
+> This is trust-level intelligence a spreadsheet cannot give you."
+
+### 3. Switch to a single school, the DSL's queue
+`screens/06-school-triage.png`
+
+> "Now I am a DSL at one school. This is my triage queue, highest priority
+> first. Notice two things. Every pupil is sealed, 'Pupil 0001', not a name.
+> And nothing is scored one-to-ten. It is a proportionate action level:
+> Monitor, Emerging need, Targeted support, Statutory threshold. We never put
+> a risk score on a child."
+
+Point at the top row.
+
+> "Top of the queue, Level 4, Statutory threshold: an online safety
+> disclosure. Let's open it."
+
+### 4. The hero case, the whole product in one screen
+`screens/07-hero-case.png`
+
+This is the centrepiece. Take your time.
+
+> "This is the case a DSL trusts. Read the banner: Watch linked three signals
+> across two systems into one pattern, and surfaced it two days before the next
+> scheduled safeguarding meeting would have connected them. That gap is the
+> whole product."
+
+Point at the timeline, **What Watch sees**.
+
+> "Every indicator with the source it came from. A withdrawn-and-anxious
+> pastoral note, secretive behaviour logged in the MIS, then the disclosure
+> itself. Three separate systems, three separate people, none of whom saw the
+> other two. Watch put them in one place."
+
+Point at **Risk interpretation** and **Escalation**.
+
+> "The reasoning is attached, in plain English, and the recommended route:
+> a same-day MASH referral, DSL leads, preserve evidence. But look at the
+> Decision panel: 'The decision is yours. Watch never closes a case.' The
+> system will not act on a child. It prepares; the human decides."
+
+Point at **Reveal identity** (top right).
+
+> "The child's name is sealed until this DSL chooses to reveal it, and when
+> they do, they give a reason and it is logged. Identity is earned, not
+> assumed."
+
+### 5. The audit trail, why a school can trust this
+`screens/15-audit.png`
+
+> "Every read and write against a child's record: who, what, when, why. It is
+> append-only, nothing can be edited or deleted, and viewing this log is itself
+> recorded. There is the identity reveal from a moment ago, with its reason.
+> This is what turns 'an AI looked at pupil data' into something a school's DPO
+> and an Ofsted inspector will sign off."
+
+### 6. Compliance and inspection, the governance story
+`screens/13-governance.png`, `screens/11-trust-kcsie.png`,
+`screens/12-trust-inspection.png`
+
+> "And because it already holds the trust's safeguarding picture, Watch does
+> the governance work for free: KCSIE compliance across every school, an
+> inspection-ready view, and a termly governance report the director can hand
+> to trustees. Same data, no extra effort."
+
+---
+
+## Proof points to land
+
+- **Time to surface.** The hero case surfaced two days ahead of the next
+  meeting; attendance and behaviour cases surface weeks ahead. That is the
+  headline metric: concerns caught earlier.
+- **Cross-system.** Three signals, two source systems, one pattern. No human
+  was watching all three.
+- **Cross-school.** Patterns invisible at one school, visible across a trust.
+- **Human-in-the-loop is structural.** The system never closes a case, never
+  reveals a name without a logged reason, never puts a number on a child.
+- **Audit and residency.** Append-only audit on every record touch; all data
+  and inference stays UK-resident (eu-west-2).
+
+## Screens captured
+
+| File | Screen |
+|------|--------|
+| `01-trust-overview.png` | Trust overview with cross-school patterns |
+| `02-trust-triage-active.png` | Trust-wide active concerns |
+| `03-cohort-detail.png` | One cross-school pattern in detail |
+| `05-school-overview.png` | Single-school overview |
+| `06-school-triage.png` | School triage queue (priority ordered) |
+| `07-hero-case.png` | The Level 4 hero case |
+| `08-documents.png` | Document reader |
+| `09-school-kcsie.png` | School KCSIE compliance |
+| `10-school-inspection.png` | School inspection view |
+| `11-trust-kcsie.png` | Trust KCSIE compliance |
+| `12-trust-inspection.png` | Trust inspection view |
+| `13-governance.png` | Governance and termly report |
+| `14-oncall.png` | On-call view |
+| `15-audit.png` | Append-only audit log |

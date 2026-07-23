@@ -43,6 +43,28 @@ function formatDay(iso: string | null) {
   });
 }
 
+// The rules engine keys its metrics in camelCase (attendancePctDrop,
+// signalsLinked). A DSL reading a case should see a plain-English label, not a
+// variable name, so we humanise the key: split camelCase and known acronyms,
+// then sentence-case it.
+const METRIC_LABELS: Record<string, string> = {
+  signalsLinked: "Signals linked",
+  daysToSurface: "Days to surface",
+  outOfHoursSignals: "Out-of-hours signals",
+  attendancePctDrop: "Attendance drop",
+  behaviourPointsSpike: "Behaviour points",
+};
+
+function metricLabel(key: string): string {
+  if (METRIC_LABELS[key]) return METRIC_LABELS[key];
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\bPct\b/gi, "percentage")
+    .toLowerCase()
+    .trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 // Case view (spec 5.5), read-only. The explainability surfaces a DSL trusts:
 // header, time to surface, the signal timeline with source attribution, the
 // interpretation, the overall assessment, the escalation level with route and
@@ -180,7 +202,9 @@ export default async function CaseViewPage({
               <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {Object.entries(c.interpretation.metrics).map(([k, v]) => (
                   <div key={k}>
-                    <dt className="text-xs text-muted-foreground">{k}</dt>
+                    <dt className="text-xs text-muted-foreground">
+                      {metricLabel(k)}
+                    </dt>
                     <dd className="text-sm font-semibold tabular-nums">
                       {String(v)}
                     </dd>
