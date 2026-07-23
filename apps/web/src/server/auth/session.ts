@@ -17,10 +17,17 @@ export type AuthSession = {
   user: User;
 };
 
+// The session cookie is `secure` only when the app is actually served over
+// HTTPS — derived from APP_URL's scheme, not NODE_ENV. A `secure` cookie set
+// on a plain-HTTP page is silently dropped by the browser, which would break
+// sign-in. Put a TLS certificate / HTTPS APP_URL in front and this flips to
+// secure automatically (see infra/README.md, DNS + TLS).
+const IS_HTTPS = env.APP_URL.startsWith("https://");
+
 export function sessionCookieOptions(expires: Date) {
   return {
     httpOnly: true,
-    secure: env.NODE_ENV === "production",
+    secure: IS_HTTPS,
     sameSite: "lax" as const,
     path: "/",
     expires,
