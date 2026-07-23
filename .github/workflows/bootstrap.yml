@@ -103,6 +103,20 @@ jobs:
           docker push --all-tags "$REGISTRY/$PROJECT/web"
           docker push --all-tags "$REGISTRY/$PROJECT/worker"
 
+      # ECS refuses to start a task whose referenced secret has no value.
+      # The Wonde key arrives later (sandbox registration) — a placeholder
+      # keeps the worker bootable; syncs simply fail until the real key is
+      # set, which is the correct behaviour.
+      - name: Ensure Wonde secret has a value
+        run: |
+          if ! aws secretsmanager get-secret-value \
+              --secret-id "$PROJECT/wonde-api-key" >/dev/null 2>&1; then
+            aws secretsmanager put-secret-value \
+              --secret-id "$PROJECT/wonde-api-key" \
+              --secret-string "not-configured-yet" >/dev/null
+            echo "placeholder set — replace with the real Wonde sandbox key when you have one"
+          fi
+
       - name: Assemble database secrets (owner)
         working-directory: infra/terraform
         run: |
@@ -202,7 +216,18 @@ jobs:
             --force-new-deployment >/dev/null
           aws ecs update-service --cluster "$PROJECT" --service worker \
             --force-new-deployment >/dev/null
-          aws ecs wait services-stable --cluster "$PROJECT" --services web worker
+          # First-ever deployments can exceed one waiter window (10 min);
+          # try twice, and dump service events on failure so the cause is
+          # visible right here.
+          aws ecs wait services-stable --cluster "$PROJECT" --services web worker \
+            || aws ecs wait services-stable --cluster "$PROJECT" --services web worker \
+            || {
+              echo "--- service state ---"
+              aws ecs describe-services --cluster "$PROJECT" --services web worker \
+                --query 'services[].{name:serviceName,desired:desiredCount,running:runningCount,events:events[0:5].message}' \
+                --output json
+              exit 1
+            }
 
       - name: Summary
         working-directory: infra/terraform
