@@ -9,7 +9,18 @@ import {
   tenancyProcedure,
 } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
+import { escalationLevel, type EscalationLevel } from "@/server/escalation";
 import { sealPupilRef } from "@/server/identity";
+
+type LevelCounts = Record<EscalationLevel, number>;
+
+function emptyLevels(): LevelCounts {
+  return { 1: 0, 2: 0, 3: 0, 4: 0 };
+}
+
+function addLevels(a: LevelCounts, b: LevelCounts): LevelCounts {
+  return { 1: a[1] + b[1], 2: a[2] + b[2], 3: a[3] + b[3], 4: a[4] + b[4] };
+}
 
 // Safeguarding metrics for one school, computed from real (synthetic) data —
 // pupils on roll and the live signal picture. Nothing here is a hardcoded
@@ -18,12 +29,21 @@ import { sealPupilRef } from "@/server/identity";
 // engine has run over ingested data (parity build order step 2); the shape is
 // correct regardless.
 async function schoolMetrics(db: TenantDb) {
-  const [pupilsOnRoll, grouped] = await Promise.all([
+  const [pupilsOnRoll, signals] = await Promise.all([
     db.pupil.count(),
-    db.signal.groupBy({ by: ["status"], _count: { _all: true } }),
+    db.signal.findMany({ select: { status: true, severity: true, serious: true } }),
   ]);
   const counts = { OPEN: 0, CONFIRMED: 0, DISMISSED: 0, ESCALATED: 0 };
-  for (const row of grouped) counts[row.status] = row._count._all;
+  // The escalation-level shape of the live caseload — how many active concerns
+  // sit at each proportionate level. This is a risk-banded series, so the UI
+  // may colour it (DESIGN.md); it is never a numeric score on a child.
+  const byLevel = emptyLevels();
+  for (const s of signals) {
+    counts[s.status]++;
+    if (s.status !== "DISMISSED") {
+      byLevel[escalationLevel(s.severity, s.serious)]++;
+    }
+  }
   return {
     pupilsOnRoll,
     // Active concerns: everything still live for the DSL — open, confirmed
@@ -32,6 +52,7 @@ async function schoolMetrics(db: TenantDb) {
     awaitingDecision: counts.OPEN,
     reviewed: counts.CONFIRMED + counts.DISMISSED + counts.ESCALATED,
     escalated: counts.ESCALATED,
+    byLevel,
   };
 }
 
@@ -44,7 +65,7 @@ async function schoolPatterns(db: TenantDb) {
   const signals = await db.signal.findMany({
     where: { status: "OPEN" },
     include: { pupil: { select: { upn: true, yearGroup: true } } },
-    orderBy: [{ severity: "desc" }, { updatedAt: "desc" }],
+    orderBy: [{ serious: "desc" }, { severity: "desc" }, { updatedAt: "desc" }],
     take: 6,
   });
   return signals.map((signal) => ({
@@ -52,6 +73,7 @@ async function schoolPatterns(db: TenantDb) {
     ref: sealPupilRef(signal.pupil.upn),
     yearGroup: signal.pupil.yearGroup,
     headline: signal.title,
+    level: escalationLevel(signal.severity, signal.serious),
     windowEnd: signal.windowEnd,
   }));
 }
@@ -134,6 +156,7 @@ export const overviewRouter = createTRPCRouter({
           pupilsOnRoll: metrics.pupilsOnRoll,
           activeConcerns: metrics.activeConcerns,
           awaitingDecision: metrics.awaitingDecision,
+          byLevel: metrics.byLevel,
         };
       }),
     );
@@ -143,8 +166,14 @@ export const overviewRouter = createTRPCRouter({
         pupilsOnRoll: acc.pupilsOnRoll + s.pupilsOnRoll,
         activeConcerns: acc.activeConcerns + s.activeConcerns,
         awaitingDecision: acc.awaitingDecision + s.awaitingDecision,
+        byLevel: addLevels(acc.byLevel, s.byLevel),
       }),
-      { pupilsOnRoll: 0, activeConcerns: 0, awaitingDecision: 0 },
+      {
+        pupilsOnRoll: 0,
+        activeConcerns: 0,
+        awaitingDecision: 0,
+        byLevel: emptyLevels(),
+      },
     );
 
     // The director's own trust name, for the heading and the report. Read

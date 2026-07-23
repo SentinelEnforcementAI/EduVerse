@@ -156,6 +156,9 @@ describe("overview.trust", () => {
     const result = await caller.overview.trust();
     expect(result.metrics.schools).toBe(2);
     expect(result.metrics.activeConcerns).toBe(1);
+    // The single active concern (severity 3) sits at escalation level 3.
+    expect(result.metrics.byLevel[3]).toBe(1);
+    expect(result.metrics.byLevel[4]).toBe(0);
     const rowA = result.schools.find((s) => s.id === schoolAId);
     expect(rowA?.dsl).toBe("School A DSL");
     expect(rowA?.activeConcerns).toBe(1);
@@ -179,6 +182,8 @@ describe("overview.school", () => {
     expect(result.patterns).toHaveLength(1);
     const pattern = result.patterns[0]!;
     expect(pattern.ref).toMatch(/^Pupil /);
+    // A severity-3 signal surfaces as escalation level 3, never a raw score.
+    expect(pattern.level).toBe(3);
     // The real name must never appear on this surface.
     expect(JSON.stringify(pattern)).not.toContain("Real");
     expect(JSON.stringify(pattern)).not.toContain("Name");

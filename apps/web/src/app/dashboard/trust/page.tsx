@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { Building2, ChevronRight, ClipboardCheck, Timer, Users } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { buildTrustTermlyReport } from "@/server/reports/termly";
 import { serverApi } from "@/trpc/server";
 
+import { CaseloadBar } from "../shell/caseload-bar";
 import { KpiCard, MiniStat } from "../shell/kpi";
 import { ReportPanel } from "../shell/report-panel";
 
@@ -73,19 +74,39 @@ export default async function TrustOverviewPage() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Schools in trust" value={data.metrics.schools} />
-        <KpiCard label="Pupils on roll" value={data.metrics.pupilsOnRoll} />
+        <KpiCard
+          label="Schools in trust"
+          value={data.metrics.schools}
+          icon={Building2}
+        />
+        <KpiCard
+          label="Pupils on roll"
+          value={data.metrics.pupilsOnRoll}
+          icon={Users}
+        />
         <KpiCard
           label="Active concerns"
           value={data.metrics.activeConcerns}
           href="/dashboard/trust/triage/active"
+          icon={ClipboardCheck}
         />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
           href="/dashboard/trust/triage/awaiting"
+          icon={Timer}
         />
       </div>
+
+      <Card className="mt-4 p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold">Caseload by escalation level</h2>
+          <span className="text-sm text-muted-foreground">
+            {data.metrics.activeConcerns} active concerns across the trust
+          </span>
+        </div>
+        <CaseloadBar byLevel={data.metrics.byLevel} className="mt-4" />
+      </Card>
 
       <h2 className="mt-10 text-xl font-semibold">School-level view</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -113,6 +134,7 @@ export default async function TrustOverviewPage() {
                 <MiniStat label="Concerns" value={school.activeConcerns} />
                 <MiniStat label="To decide" value={school.awaitingDecision} />
               </div>
+              <CaseloadBar byLevel={school.byLevel} className="mt-4" compact />
             </Card>
           </Link>
         ))}
