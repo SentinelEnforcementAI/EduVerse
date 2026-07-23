@@ -15,6 +15,7 @@ import {
   RevealControl,
   SealedNotice,
 } from "./case-actions";
+import { CommsPanel } from "./case-comms";
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("en-GB", {
@@ -185,6 +186,47 @@ export default async function CaseViewPage({
               <p className="text-sm leading-relaxed">{c.overall}</p>
             </Card>
           </section>
+
+          <section>
+            <h2 className="text-xl font-semibold">Take action</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Draft a document for this case. Watch prepares it; you edit, then
+              file or download. Watch never sends anything itself.
+            </p>
+            <div className="mt-3">
+              <CommsPanel
+                signalId={c.signalId}
+                schoolId={c.schoolId}
+                options={c.commOptions}
+              />
+            </div>
+          </section>
+
+          {c.documents.length > 0 ? (
+            <section>
+              <h2 className="text-xl font-semibold">Case documents</h2>
+              <ul className="mt-3 flex flex-col gap-2">
+                {c.documents.map((d) => (
+                  <li key={d.id}>
+                    <Card className="flex flex-wrap items-center justify-between gap-2 p-4">
+                      <div>
+                        <div className="text-sm font-semibold">{d.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {d.type} ·{" "}
+                          {d.docDate.toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })}{" "}
+                          · {d.status}
+                        </div>
+                      </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section>
             <h2 className="text-xl font-semibold">Case notes</h2>

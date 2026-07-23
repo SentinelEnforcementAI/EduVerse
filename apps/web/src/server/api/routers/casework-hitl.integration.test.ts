@@ -103,6 +103,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const ids = [schoolAId, otherSchoolId];
+  await systemDb.document.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.caseNote.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.auditEvent.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.signalDecision.deleteMany({ where: { tenantId: { in: ids } } });
@@ -213,5 +214,41 @@ describe("notes with tagging (append-only, audited)", () => {
       where: { signalId: level3SignalId },
     });
     expect(notes).toHaveLength(0);
+  });
+});
+
+describe("comms (draft and file)", () => {
+  it("drafts a sealed comm, then files it as an audited case document", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+
+    // Draft a MASH referral for the (sealed) level-3 case.
+    const draft = await caller.casework.draftComm({
+      signalId: level3SignalId,
+      type: "mash",
+    });
+    expect(draft.body).toContain("MASH");
+    expect(draft.body).not.toContain("—");
+
+    const filed = await caller.casework.fileComm({
+      signalId: level3SignalId,
+      type: "mash",
+      body: draft.body,
+    });
+    expect(filed.id).toBeTruthy();
+
+    const c = await caller.casework.case({ signalId: level3SignalId });
+    expect(c.documents.some((d) => d.title === "MASH Referral")).toBe(true);
+
+    const events = await dbForTenant(schoolAId).auditEvent.findMany({
+      where: { action: "case.comm.filed", entityId: level3SignalId },
+    });
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it("keeps case documents scoped to their school (RLS)", async () => {
+    const docs = await dbForTenant(otherSchoolId).document.findMany({
+      where: { signalId: level3SignalId },
+    });
+    expect(docs).toHaveLength(0);
   });
 });

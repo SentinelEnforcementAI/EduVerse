@@ -212,6 +212,44 @@ model CaseNote {
   @@map("case_notes")
 }
 
+enum DocumentScope {
+  ORG
+  CASE
+}
+
+// A document in the Watch repository (spec 5.9). Two scopes: org-level (the
+// vault — policies, records, generated reports) and case-level (documents
+// filed against a signal, e.g. a drafted comm or a MASH response). Case
+// documents carry the sealed pupil reference via signal/pupil ids, never a
+// name. Not hard-deletable: the RLS migration grants SELECT/INSERT/UPDATE only,
+// so a safeguarding document is never removed (spec principle 3), only
+// superseded by status.
+model Document {
+  id        String        @id @default(cuid())
+  tenantId  String        @map("tenant_id")
+  scope     DocumentScope
+  signalId  String?       @map("signal_id")
+  pupilId   String?       @map("pupil_id")
+  title     String
+  // Referral, Letter, Note, Assessment, Record, Chronology, Policy, Report,
+  // Return, Training. A free string, not an enum, so document kinds can grow
+  // without a migration.
+  type      String
+  docDate   DateTime      @map("doc_date")
+  status    String        @default("Filed")
+  themes    String[]
+  summary   String
+  content   String
+  generated Boolean       @default(false)
+  source    String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@index([tenantId, scope, docDate])
+  @@index([signalId, createdAt])
+  @@map("documents")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.

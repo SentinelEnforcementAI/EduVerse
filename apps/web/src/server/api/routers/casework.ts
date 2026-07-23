@@ -18,6 +18,23 @@ import {
 } from "@/server/escalation";
 import { REVEAL_REASONS, sealPupilRef } from "@/server/identity";
 import { decideSignal } from "@/server/signals/decide";
+import {
+  buildDraft,
+  COMM_META,
+  COMM_TYPES,
+  type CaseDraftData,
+  type CommType,
+} from "@/server/comms/templates";
+
+function ukDate(date: Date): string {
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+const commTypeEnum = z.enum(COMM_TYPES as [CommType, ...CommType[]]);
 
 // Resolves the school a case action targets: a DSL's single school, or the
 // school a director names. Shared by the case query and every mutation.
@@ -231,6 +248,13 @@ export const caseworkRouter = createTRPCRouter({
         users.map((u) => [u.id, u.name ?? u.email]),
       );
 
+      // Documents filed against this case (spec 5.6 comms file here).
+      const documents = await db.document.findMany({
+        where: { signalId: signal.id, scope: "CASE" },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      });
+
       await recordAuditEvent(db, {
         tenantId: school.id,
         userId: ctx.session.user.id,
@@ -281,6 +305,20 @@ export const caseworkRouter = createTRPCRouter({
             .map((id) => nameById.get(id))
             .filter((name): name is string => Boolean(name)),
           createdAt: n.createdAt,
+        })),
+        documents: documents.map((d) => ({
+          id: d.id,
+          title: d.title,
+          type: d.type,
+          status: d.status,
+          docDate: d.docDate,
+          summary: d.summary,
+        })),
+        commOptions: COMM_TYPES.map((t) => ({
+          type: t,
+          label: COMM_META[t].label,
+          blurb: COMM_META[t].blurb,
+          primary: COMM_META[t].primary ?? false,
         })),
         audit: auditEvents.map((e) => ({
           id: e.id,
@@ -431,5 +469,127 @@ export const caseworkRouter = createTRPCRouter({
         return note.id;
       });
       return { id: noteId };
+    }),
+
+  // Draft a comm for a case (spec 5.6). Deterministic content built from the
+  // real case data; the pupil appears by revealed name if the case is
+  // revealed, otherwise by sealed reference. The LLM advisory draft (step 15)
+  // will layer on and fall back to exactly this.
+  draftComm: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+        type: commTypeEnum,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const signal = await db.signal.findUnique({
+        where: { id: input.signalId },
+        include: {
+          pupil: {
+            select: {
+              upn: true,
+              yearGroup: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          ruleVersion: { select: { key: true } },
+        },
+      });
+      if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const revealed = await db.auditEvent.findFirst({
+        where: {
+          entityType: "signal",
+          entityId: signal.id,
+          action: "pupil.identity.revealed",
+        },
+        select: { id: true },
+      });
+      const reasoning = signal.reasoning as SignalReasoning;
+      const source = sourceForRule(signal.ruleVersion.key);
+      const data: CaseDraftData = {
+        schoolName: school.name,
+        pupilRef: revealed
+          ? `${signal.pupil.firstName} ${signal.pupil.lastName}`
+          : sealPupilRef(signal.pupil.upn),
+        yearGroup: signal.pupil.yearGroup,
+        window: `${ukDate(signal.windowStart)} to ${ukDate(signal.windowEnd)}`,
+        dsl: ctx.session.user.name ?? "The Designated Safeguarding Lead",
+        date: ukDate(new Date()),
+        confidence: confidenceBand(signal.severity),
+        timeline: reasoning.dataPoints.map((p) => ({
+          date: p.date ?? null,
+          label: p.label,
+          source,
+        })),
+        overall: reasoning.summary,
+      };
+      return { type: input.type, body: buildDraft(input.type, data) };
+    }),
+
+  // File a (possibly edited) comm to the case as a document (spec 5.6). Written
+  // and audited atomically; a case document never carries a pupil name.
+  fileComm: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+        type: commTypeEnum,
+        body: z.string().trim().min(1).max(20000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const signal = await db.signal.findUnique({
+        where: { id: input.signalId },
+        select: { id: true, pupilId: true },
+      });
+      if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const meta = COMM_META[input.type];
+      const userId = ctx.session.user.id;
+      const summary = input.body.replace(/\s+/g, " ").slice(0, 200);
+
+      const docId = await systemTransaction(async (tx) => {
+        const doc = await tx.document.create({
+          data: {
+            tenantId: school.id,
+            scope: "CASE",
+            signalId: signal.id,
+            pupilId: signal.pupilId,
+            title: meta.docTitle,
+            type: meta.docType,
+            docDate: new Date(),
+            status: "Filed",
+            themes: meta.themes,
+            summary,
+            content: input.body,
+            source: "comms",
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            tenantId: school.id,
+            userId,
+            action: "case.comm.filed",
+            entityType: "signal",
+            entityId: signal.id,
+            pupilId: signal.pupilId,
+            metadata: { commType: input.type, documentId: doc.id },
+          },
+        });
+        return doc.id;
+      });
+      return { id: docId };
     }),
 });
