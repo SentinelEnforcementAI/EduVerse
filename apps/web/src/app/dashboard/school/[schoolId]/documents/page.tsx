@@ -8,6 +8,7 @@ import { serverApi } from "@/trpc/server";
 import { Breadcrumbs } from "../../../shell/breadcrumbs";
 import { DocumentSearch } from "./document-search";
 import { EvidencePackButton } from "./evidence-pack";
+import { TrainingReader } from "./training-reader";
 
 // Documents (spec 5.9): the org vault and contextual search over the whole
 // repository. Case documents are searchable too, sealed by construction.
@@ -62,7 +63,10 @@ export default async function DocumentsPage({
             not its filename.
           </p>
         </div>
-        <EvidencePackButton schoolId={schoolId} />
+        <div className="flex flex-wrap gap-2">
+          <TrainingReader schoolId={schoolId} />
+          <EvidencePackButton schoolId={schoolId} />
+        </div>
       </div>
 
       <div className="mt-6">

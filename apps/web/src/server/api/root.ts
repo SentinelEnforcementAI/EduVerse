@@ -4,6 +4,7 @@ import { caseworkRouter } from "@/server/api/routers/casework";
 import { documentsRouter } from "@/server/api/routers/documents";
 import { healthRouter } from "@/server/api/routers/health";
 import { overviewRouter } from "@/server/api/routers/overview";
+import { readerRouter } from "@/server/api/routers/reader";
 import { signalsRouter } from "@/server/api/routers/signals";
 import { syncRouter } from "@/server/api/routers/sync";
 import { tenantRouter } from "@/server/api/routers/tenant";
@@ -19,6 +20,7 @@ export const appRouter = createTRPCRouter({
   overview: overviewRouter,
   casework: caseworkRouter,
   documents: documentsRouter,
+  reader: readerRouter,
 });
 
 export type AppRouter = typeof appRouter;
