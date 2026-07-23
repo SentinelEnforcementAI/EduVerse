@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
 import { LevelChip } from "../shell/level-chip";
+import { SealedAvatar } from "../shell/sealed-avatar";
 
 // Alerts: the action-threshold inbox. Every active concern at level 3 or 4
 // across the caller's scope, most urgent first, each opening its case. Sealed —
@@ -34,7 +35,11 @@ export default async function AlertsPage() {
                 href={`/dashboard/school/${a.schoolId}/case/${a.id}`}
                 className="flex items-center gap-4 border-b border-cloud px-5 py-4 transition-colors last:border-b-0 hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <LevelChip level={a.level} className="w-44 justify-center" />
+                <SealedAvatar refLabel={a.ref} />
+                <LevelChip
+                  level={a.level}
+                  className="hidden w-44 justify-center sm:inline-flex"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold">
                     {a.ref}{" "}

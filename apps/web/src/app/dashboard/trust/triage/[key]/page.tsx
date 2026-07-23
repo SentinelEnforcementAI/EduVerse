@@ -50,6 +50,18 @@ export default async function TrustTriagePage({
         rows={data.rows}
         showSchool
         caseHref={(row) => `/dashboard/school/${row.schoolId}/case/${row.id}`}
+        tabs={[
+          {
+            label: "Active concerns",
+            href: "/dashboard/trust/triage/active",
+            active: key === "active",
+          },
+          {
+            label: "Awaiting a decision",
+            href: "/dashboard/trust/triage/awaiting",
+            active: key === "awaiting",
+          },
+        ]}
       />
     </div>
   );

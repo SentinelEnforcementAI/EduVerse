@@ -64,6 +64,18 @@ export default async function SchoolTriagePage({
         rows={data.rows}
         showSchool={false}
         caseHref={(row) => `/dashboard/school/${row.schoolId}/case/${row.id}`}
+        tabs={[
+          {
+            label: "Active concerns",
+            href: `/dashboard/school/${schoolId}/triage/active`,
+            active: key === "active",
+          },
+          {
+            label: "Awaiting a decision",
+            href: `/dashboard/school/${schoolId}/triage/awaiting`,
+            active: key === "awaiting",
+          },
+        ]}
       />
     </div>
   );

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, FileCheck2, ShieldCheck } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
+import { Card } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../../shell/breadcrumbs";
@@ -66,13 +67,39 @@ export default async function KcsiePage({
         <KcsieActions schoolId={schoolId} />
       </div>
 
-      <ul className="mt-6 overflow-hidden rounded-lg border border-cloud bg-card">
+      {(() => {
+        const upToDate = data.components.filter((c) => c.status === "ok").length;
+        const total = data.components.length;
+        return (
+          <Card className="mt-6 flex items-center gap-4 p-5">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-cobalt-tint text-cobalt">
+              <ShieldCheck className="size-5" aria-hidden />
+            </span>
+            <div className="flex-1">
+              <div className="text-lg font-semibold">
+                {upToDate} of {total} requirements up to date
+              </div>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-cloud">
+                <div
+                  className="h-full rounded-full bg-cobalt"
+                  style={{ width: `${total ? (upToDate / total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
+
+      <ul className="mt-4 overflow-hidden rounded-xl border border-cloud bg-card">
         {data.components.map((c) => (
           <li
             key={c.key}
-            className="flex flex-wrap items-center justify-between gap-3 border-b border-cloud px-4 py-4 last:border-b-0"
+            className="flex flex-wrap items-center gap-4 border-b border-cloud px-4 py-4 last:border-b-0"
           >
-            <div className="min-w-0">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-cobalt-tint text-cobalt">
+              <FileCheck2 className="size-[18px]" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{c.label}</span>
                 <ComplianceTag status={c.status} />

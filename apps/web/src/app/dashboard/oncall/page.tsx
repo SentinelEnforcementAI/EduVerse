@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
 import { LevelChip } from "../shell/level-chip";
+import { SealedAvatar } from "../shell/sealed-avatar";
 
 // On-call (spec 5.16): the out-of-hours view. The highest-priority active cases
 // across the caller's scope, sealed, in a focused phone-width layout.
@@ -33,16 +34,21 @@ export default async function OnCallPage() {
             <li key={row.id}>
               <Link
                 href={`/dashboard/school/${row.schoolId}/case/${row.id}`}
-                className="block rounded-xl border border-cloud bg-card p-4 transition-colors hover:border-cobalt"
+                className="block rounded-xl border border-cloud bg-card p-4 transition-colors hover:border-cobalt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{row.ref}</span>
-                  <LevelChip level={row.level} />
+                <div className="flex items-start gap-3">
+                  <SealedAvatar refLabel={row.ref} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">{row.ref}</span>
+                      <LevelChip level={row.level} />
+                    </div>
+                    <div className="mt-0.5 text-sm text-muted-foreground">
+                      Year {row.yearGroup} · {row.schoolName}
+                    </div>
+                    <div className="mt-1 text-sm">{row.headline}</div>
+                  </div>
                 </div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Year {row.yearGroup} · {row.schoolName}
-                </div>
-                <div className="mt-1 text-sm">{row.headline}</div>
               </Link>
             </li>
           ))}

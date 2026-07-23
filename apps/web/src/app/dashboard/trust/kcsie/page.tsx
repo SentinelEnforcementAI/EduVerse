@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { Building2, ChevronRight, ShieldCheck } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
+import { Card } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../shell/breadcrumbs";
@@ -38,14 +39,40 @@ export default async function TrustKcsiePage() {
         Each school&apos;s overall status, derived from its own records.
       </p>
 
-      <ul className="mt-6 overflow-hidden rounded-lg border border-cloud bg-card">
+      {(() => {
+        const upToDate = data.schools.filter((s) => s.overall === "ok").length;
+        const total = data.schools.length;
+        return (
+          <Card className="mt-6 flex items-center gap-4 p-5">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-cobalt-tint text-cobalt">
+              <ShieldCheck className="size-5" aria-hidden />
+            </span>
+            <div className="flex-1">
+              <div className="text-lg font-semibold">
+                {upToDate} of {total} schools up to date
+              </div>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-cloud">
+                <div
+                  className="h-full rounded-full bg-cobalt"
+                  style={{ width: `${total ? (upToDate / total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
+
+      <ul className="mt-4 overflow-hidden rounded-xl border border-cloud bg-card">
         {data.schools.map((s) => (
           <li key={s.id} className="border-b border-cloud last:border-b-0">
             <Link
               href={`/dashboard/school/${s.id}/kcsie`}
               className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 transition-colors hover:bg-paper"
             >
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-cobalt-tint text-cobalt">
+                  <Building2 className="size-[18px]" aria-hidden />
+                </span>
                 <span className="font-medium">{s.name}</span>
                 <ComplianceTag status={s.overall} />
               </div>

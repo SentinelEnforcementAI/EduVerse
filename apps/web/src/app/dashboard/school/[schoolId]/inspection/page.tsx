@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  GraduationCap,
+  ScanSearch,
+  Send,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -38,9 +45,14 @@ export default async function InspectionPage({
   const t = data.thread;
   const isDirector = tenancy.mode === "mat";
 
-  const strands: { title: string; rows: [string, string | number][] }[] = [
+  const strands: {
+    title: string;
+    icon: LucideIcon;
+    rows: [string, string | number][];
+  }[] = [
     {
       title: "Policy and training",
+      icon: GraduationCap,
       rows: [
         ["KCSIE compliance", t.compliance.overallLabel],
         ["Policies and records on file", t.assurance.policies],
@@ -48,6 +60,7 @@ export default async function InspectionPage({
     },
     {
       title: "Identification",
+      icon: ScanSearch,
       rows: [
         ["Patterns surfaced", t.identification.surfaced],
         ["Active concerns", t.identification.active],
@@ -56,6 +69,7 @@ export default async function InspectionPage({
     },
     {
       title: "Action",
+      icon: Send,
       rows: [
         ["Referrals", t.action.referrals],
         ["Case documents filed", t.action.caseDocuments],
@@ -63,6 +77,7 @@ export default async function InspectionPage({
     },
     {
       title: "Assurance",
+      icon: ShieldCheck,
       rows: [["Audit entries", t.assurance.auditEntries]],
     },
   ];
@@ -100,19 +115,39 @@ export default async function InspectionPage({
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {strands.map((strand) => (
-          <Card key={strand.title} className="p-5">
-            <h2 className="text-base font-semibold">{strand.title}</h2>
-            <dl className="mt-3 flex flex-col gap-2">
-              {strand.rows.map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-2">
-                  <dt className="text-sm text-muted-foreground">{label}</dt>
-                  <dd className="text-sm font-semibold tabular-nums">{value}</dd>
+        {strands.map((strand, i) => {
+          const Icon = strand.icon;
+          return (
+            <Card key={strand.title} className="flex flex-col p-5">
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-cobalt-tint text-cobalt">
+                  <Icon className="size-5" aria-hidden />
+                </span>
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Stage {i + 1}
+                  </div>
+                  <h2 className="text-base font-semibold leading-tight">
+                    {strand.title}
+                  </h2>
                 </div>
-              ))}
-            </dl>
-          </Card>
-        ))}
+              </div>
+              <dl className="mt-4 flex flex-col gap-2 border-t border-cloud pt-3">
+                {strand.rows.map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <dt className="text-sm text-muted-foreground">{label}</dt>
+                    <dd className="text-sm font-semibold tabular-nums">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+          );
+        })}
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">

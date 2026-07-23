@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Brain } from "lucide-react";
+import { Brain, Building2, Network } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -41,18 +41,26 @@ export default async function CohortPage({
       />
       <h1 className="text-2xl font-semibold tracking-tight">{data.title}</h1>
 
-      <Card className="mt-4 p-5">
+      <Card className="mt-4 flex gap-4 p-5">
+        <span className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-cobalt-tint text-cobalt sm:flex">
+          <Network className="size-5" aria-hidden />
+        </span>
         <p className="text-sm leading-relaxed">{data.summary}</p>
       </Card>
 
       <h2 className="mt-8 text-xl font-semibold">By school</h2>
-      <ul className="mt-3 overflow-hidden rounded-lg border border-cloud bg-card">
+      <ul className="mt-3 overflow-hidden rounded-xl border border-cloud bg-card">
         {data.rows.map((r) => (
           <li
             key={r.school}
             className="flex items-center justify-between border-b border-cloud px-4 py-3 last:border-b-0"
           >
-            <span className="text-sm font-medium">{r.school}</span>
+            <span className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-cobalt-tint text-cobalt">
+                <Building2 className="size-[18px]" aria-hidden />
+              </span>
+              <span className="text-sm font-medium">{r.school}</span>
+            </span>
             <span className="text-lg font-semibold tabular-nums text-cobalt">
               {r.count}
             </span>
