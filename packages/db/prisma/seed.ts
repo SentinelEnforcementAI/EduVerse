@@ -26,6 +26,7 @@ export type SeedOptions = {
 };
 
 export type SeedSummary = {
+  trust: { slug: string; name: string; trustId: string; director: string };
   schools: {
     slug: string;
     name: string;
@@ -36,6 +37,16 @@ export type SeedSummary = {
     attainmentRecords: number;
     riskPupils: Record<RiskPattern, string[]>;
   }[];
+};
+
+// All names here are synthetic. The two design-partner schools (Downlands,
+// Patcham, per CLAUDE.md) are grouped under one Multi-Academy Trust so both
+// tenancy modes — single school and MAT — have real data behind them. The
+// trust name is invented for the demo; it is not a real organisation.
+const TRUST = { slug: "weald-learning-trust", name: "Weald Learning Trust" };
+const DIRECTOR = {
+  email: "director@weald-learning-trust.example",
+  name: "Trust Director of Safeguarding",
 };
 
 const SCHOOLS = [
@@ -51,22 +62,53 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedSumma
   const anchorDate = options.anchorDate ?? new Date();
   const log = options.log ?? (() => undefined);
 
-  const summary: SeedSummary = { schools: [] };
+  // The Multi-Academy Trust both schools belong to. A trust carries no pupil
+  // data itself — every child stays under a school (tenant) — so the MAT
+  // reframe leaves per-school row-level security untouched.
+  const trust = await systemDb.trust.upsert({
+    where: { slug: TRUST.slug },
+    update: { name: TRUST.name },
+    create: { name: TRUST.name, slug: TRUST.slug },
+  });
+
+  // Trust Director of Safeguarding: sees across every school in the trust
+  // (spec 5.1). Scoped by trustId, no single tenant.
+  await systemDb.user.upsert({
+    where: { email: DIRECTOR.email },
+    update: { role: "DIRECTOR", trustId: trust.id, tenantId: null },
+    create: {
+      email: DIRECTOR.email,
+      name: DIRECTOR.name,
+      role: "DIRECTOR",
+      trustId: trust.id,
+    },
+  });
+
+  const summary: SeedSummary = {
+    trust: {
+      slug: TRUST.slug,
+      name: TRUST.name,
+      trustId: trust.id,
+      director: DIRECTOR.email,
+    },
+    schools: [],
+  };
 
   for (const school of SCHOOLS) {
     const tenant = await systemDb.tenant.upsert({
       where: { slug: school.slug },
-      update: { name: school.name },
-      create: { name: school.name, slug: school.slug },
+      update: { name: school.name, trustId: trust.id },
+      create: { name: school.name, slug: school.slug, trustId: trust.id },
     });
 
-    // Dev DSL account per school so the dashboard is usable immediately.
+    // Dev DSL account per school so the school view is usable immediately.
     await systemDb.user.upsert({
       where: { email: `dsl@${school.slug}.example` },
-      update: { tenantId: tenant.id },
+      update: { role: "DSL", tenantId: tenant.id, trustId: null },
       create: {
         email: `dsl@${school.slug}.example`,
         name: `${school.name} DSL`,
+        role: "DSL",
         tenantId: tenant.id,
       },
     });
@@ -213,7 +255,9 @@ if (isDirectRun) {
         (manifestWritten
           ? `\nEmbedded risk pupils written to ${manifestPath}`
           : "") +
-          `\nSign in locally as dsl@downlands.example or dsl@patcham.example`,
+          `\n${summary.trust.name} seeded with ${summary.schools.length} schools.` +
+          `\nSign in locally as a school DSL (dsl@downlands.example or` +
+          ` dsl@patcham.example) or as the trust director (${summary.trust.director}).`,
       );
       await systemDb.$disconnect();
     })

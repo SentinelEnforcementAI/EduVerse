@@ -9,6 +9,7 @@ function publicContext(): TRPCContext {
     session: null,
     tenantId: null,
     tenantDb: null,
+    tenancy: null,
     headers: new Headers(),
   };
 }

@@ -20,19 +20,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// A tenant is a school (Downlands, Patcham) or, later, a trust.
-// CTO-DECISION: MAT hierarchy (trust → schools, MAT-level users spanning
-// schools). Flat tenants are the simplest working version for the two
-// design-partner schools; nesting can be added without breaking tenant_id.
+// A Multi-Academy Trust: the grouping a set of schools belongs to. Watch's
+// second tenancy mode (spec 5.1). A trust does NOT carry pupil data itself —
+// every child's record still lives under exactly one school (the Tenant).
+//
+// CTO-DECISION: MAT hierarchy shape. The simplest working version keeps the
+// school as THE tenant (tenant_id stays the RLS key on every table, so the
+// entire tested isolation foundation holds unchanged) and adds Trust purely as
+// a grouping over school-tenants. A trust-level user reads by fanning out
+// across the trust's schools, each through its own tenant RLS context — never
+// a "see everything" path. A dedicated trust RLS context (app.trust_id) is the
+// later hardening; it is not needed for the design-partner MVP.
+model Trust {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  schools Tenant[]
+  users   User[]
+
+  @@map("trusts")
+}
+
+// A tenant is a school (Bennett Memorial, Rusthall Academy). Pupil data always
+// belongs to exactly one tenant; tenant_id is the row-level-security key on
+// every table. A tenant optionally belongs to a Trust (nullable trust_id) — a
+// standalone single school has none.
 model Tenant {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  // The Multi-Academy Trust this school belongs to, if any. NULL for a
+  // standalone single school (the demo's "Single school" tenancy mode).
+  trustId   String?  @map("trust_id")
   // Wonde school identifier once the tenant is linked to a (sandbox) school.
   wondeSchoolId String? @unique @map("wonde_school_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  trust              Trust?             @relation(fields: [trustId], references: [id])
   users              User[]
   pupils             Pupil[]
   attendanceRecords  AttendanceRecord[]
@@ -345,7 +373,18 @@ model AttainmentRecord {
   @@map("attainment_records")
 }
 
-// A user of the platform (DSL, pastoral staff, MAT-level user).
+// How a user is scoped. A school DSL sees one school; a trust director sees
+// across the schools of their trust (spec 5.1, escalation-level identity
+// rules unchanged by this).
+// CTO-DECISION: fuller RBAC (deputy DSL, pastoral, admin, per-permission
+// grants). Two roles are the simplest working version that expresses the two
+// tenancy modes the product actually has today.
+enum UserRole {
+  DSL
+  DIRECTOR
+}
+
+// A user of the platform (a school DSL, or a trust Director of Safeguarding).
 // Auth is email magic link for MVP. The schema is deliberately provider-agnostic
 // (no password column, no provider-specific columns) so WorkOS / school SSO can
 // replace magic links later without a schema change: an SSO provider only needs
@@ -354,21 +393,26 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
-  // CTO-DECISION: user roles (DSL / deputy / MAT-level / admin) and how they map
-  // to permissions. Simplest working version: no role column yet; every signed-in
-  // user is treated as a DSL for the design-partner MVP.
-  // CTO-DECISION: tenant membership model (single school vs MAT-level users who
-  // span schools). Nullable single tenant_id is the simplest working version.
-  // NULL tenant_id = platform-level user, visible only to the system context.
+  role      UserRole @default(DSL)
+  // Exactly one of tenantId / trustId is set for an operational user:
+  //   DSL      → tenant_id  (their school), trust_id NULL
+  //   DIRECTOR → trust_id   (their trust),  tenant_id NULL
+  // A director reads each of their trust's schools through that school's own
+  // tenant RLS context (see @sentinel/db resolveAccessibleSchools); there is
+  // no cross-tenant read path. NULL tenant_id + NULL trust_id = platform-level
+  // user, visible only to the system context.
   tenantId  String?  @map("tenant_id")
+  trustId   String?  @map("trust_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   tenant          Tenant?          @relation(fields: [tenantId], references: [id])
+  trust           Trust?           @relation(fields: [trustId], references: [id])
   magicLinkTokens MagicLinkToken[]
   sessions        Session[]
 
   @@index([tenantId])
+  @@index([trustId])
 
   @@map("users")
 }

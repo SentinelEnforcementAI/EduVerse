@@ -1,149 +1,77 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { ArrowRight, Building2, GraduationCap } from "lucide-react";
 
-import { dbForTenant } from "@sentinel/db";
+import { Card } from "@/components/ui/card";
+import { serverApi } from "@/trpc/server";
 
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { getAuthSession } from "@/server/auth/session";
+// Entry (spec section 4). A DSL has one school, so they land straight on it. A
+// director chooses how to work: across the whole trust, or stepping into one
+// school. Both tenancy modes are reachable here for a user who has both.
+export default async function DashboardHome() {
+  const api = await serverApi();
+  const tenancy = await api.overview.tenancy();
 
-import { SystemStatus } from "./system-status";
-
-const SYNC_TYPE_LABELS = {
-  STUDENTS: "Pupils",
-  ATTENDANCE: "Attendance",
-  BEHAVIOUR: "Behaviour",
-  ATTAINMENT: "Attainment",
-} as const;
-
-export default async function DashboardPage() {
-  const session = await getAuthSession();
-  const tenantDb = session?.user.tenantId
-    ? dbForTenant(session.user.tenantId)
-    : null;
-  const pupilCount = tenantDb ? await tenantDb.pupil.count() : null;
-  const openSignals = tenantDb
-    ? await tenantDb.signal.count({ where: { status: "OPEN" } })
-    : null;
-  const syncRuns = tenantDb
-    ? await tenantDb.syncRun.findMany({
-        orderBy: { queuedAt: "desc" },
-        take: 50,
-      })
-    : [];
-  const latestSyncByType = (
-    Object.keys(SYNC_TYPE_LABELS) as (keyof typeof SYNC_TYPE_LABELS)[]
-  ).map((type) => ({
-    type,
-    run: syncRuns.find((run) => run.type === type) ?? null,
-  }));
-
-  // KPI stat row (DESIGN.md v2): value, label. Deltas need history the
-  // schema doesn't record yet — values only, no invented trends.
-  const stats = [
-    {
-      label: "Pupils on roll",
-      value: pupilCount,
-      hint: "Synthetic data until DPAs are signed",
-    },
-    {
-      label: "Open signals",
-      value: openSignals,
-      hint: "Awaiting a DSL decision",
-    },
-  ];
+  if (tenancy.mode === "school") {
+    const school = tenancy.schools[0];
+    if (school) {
+      redirect(`/dashboard/school/${school.id}`);
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome{session?.user.name ? `, ${session.user.name}` : ""}
-        </h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          Signals for your school will appear here once the risk engine is
-          live.
-        </p>
-      </div>
+    <div className="mx-auto flex max-w-3xl flex-col items-center py-10 text-center">
+      <p className="text-lg font-medium italic text-cobalt">
+        Every child. Seen. Safe. Supported.
+      </p>
+      <p className="mt-3 max-w-md text-base text-muted-foreground">
+        Choose how to work. Both paths use the same intelligence layer over your
+        existing systems.
+      </p>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.label} className="p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {stat.label}
+      <div className="mt-10 grid w-full gap-5 sm:grid-cols-2">
+        <Link
+          href="/dashboard/trust"
+          className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Card className="h-full p-8 text-left transition-colors group-hover:border-cobalt">
+            <div className="flex size-12 items-center justify-center rounded-lg bg-cobalt-tint">
+              <Building2 className="size-6 text-cobalt" aria-hidden />
             </div>
-            <div className="mt-2 text-3xl font-semibold tabular-nums">
-              {stat.value ?? "—"}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {stat.value === null ? "No school assigned yet" : stat.hint}
+            <div className="mt-5 text-xl font-semibold">Multi-Academy Trust</div>
+            <p className="mt-2 text-base text-muted-foreground">
+              Trust-wide oversight, school-level status, and drill-down into any
+              school.
+            </p>
+            <div className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-cobalt">
+              Open trust overview
+              <ArrowRight className="size-4" aria-hidden />
             </div>
           </Card>
-        ))}
-      </div>
+        </Link>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Signals</CardTitle>
-            <CardDescription>
-              Raised by the rules engine, each with its full reasoning —
-              nothing is actioned without a DSL&apos;s decision.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {openSignals === null ? (
-              <span className="text-base text-muted-foreground">
-                No school assigned yet.
-              </span>
-            ) : (
-              <Button asChild size="sm">
-                <Link href="/dashboard/signals">Review signals</Link>
-              </Button>
-            )}
-          </CardContent>
+        <Card className="h-full p-8 text-left">
+          <div className="flex size-12 items-center justify-center rounded-lg bg-cobalt-tint">
+            <GraduationCap className="size-6 text-cobalt" aria-hidden />
+          </div>
+          <div className="mt-5 text-xl font-semibold">Single school</div>
+          <p className="mt-2 text-base text-muted-foreground">
+            Step into one school&apos;s safeguarding overview.
+          </p>
+          <ul className="mt-4 flex flex-col gap-2">
+            {tenancy.schools.map((school) => (
+              <li key={school.id}>
+                <Link
+                  href={`/dashboard/school/${school.id}`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-cobalt hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {school.name}
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Data sync</CardTitle>
-            <CardDescription>
-              Ingestion from the school&apos;s MIS via Wonde (sandbox first).
-              Read-only — Sentinel Watch never writes back.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-2 text-base">
-              {latestSyncByType.map(({ type, run }) => (
-                <li key={type} className="flex items-center justify-between">
-                  <span>{SYNC_TYPE_LABELS[type]}</span>
-                  {/* Ops status stays monochrome: red/amber/green carry risk
-                      meaning about children exclusively (DESIGN.md v2). */}
-                  {run ? (
-                    <span
-                      className={
-                        run.status === "FAILED"
-                          ? "font-medium tabular-nums"
-                          : "tabular-nums text-muted-foreground"
-                      }
-                    >
-                      {run.status.toLowerCase()}
-                      {run.finishedAt
-                        ? ` · ${run.finishedAt.toLocaleDateString("en-GB")}`
-                        : ""}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">never synced</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-        <SystemStatus />
       </div>
     </div>
   );

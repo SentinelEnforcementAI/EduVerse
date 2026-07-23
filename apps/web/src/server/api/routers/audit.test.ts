@@ -9,6 +9,8 @@ const tenantUser: User = {
   id: "user_1",
   email: "dsl@downlands.example.org.uk",
   name: "Test DSL",
+  role: "DSL",
+  trustId: null,
   tenantId: "tenant_a",
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -20,6 +22,7 @@ function tenantContext(tenantDb: unknown): TRPCContext {
     session: { sessionId: "sess_1", user: tenantUser },
     tenantId: "tenant_a",
     tenantDb: tenantDb as TRPCContext["tenantDb"],
+    tenancy: null,
     headers: new Headers(),
   };
 }
@@ -54,6 +57,7 @@ describe("audit.list", () => {
       session: null,
       tenantId: null,
       tenantDb: null,
+      tenancy: null,
       headers: new Headers(),
     });
     await expect(caller.audit.list()).rejects.toMatchObject({
