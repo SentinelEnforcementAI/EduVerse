@@ -106,13 +106,16 @@ export default async function TrustOverviewPage() {
           value={data.metrics.activeConcerns}
           href="/dashboard/trust/triage/active"
           icon={Flag}
+          tone="risk"
           footer={`${data.metrics.byLevel[3] + data.metrics.byLevel[4]} at action threshold`}
+          trend={data.metrics.trend}
         />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
           href="/dashboard/trust/triage/awaiting"
           icon={Timer}
+          tone="warning"
           footer="Needs a DSL decision"
         />
       </div>

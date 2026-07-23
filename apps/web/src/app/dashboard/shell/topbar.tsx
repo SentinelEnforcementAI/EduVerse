@@ -1,5 +1,8 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { Bell, PhoneCall, Search, ShieldCheck } from "lucide-react";
+import { Bell, PhoneCall, ShieldCheck } from "lucide-react";
+
+import { SearchBox } from "./search-box";
 
 // The top bar sits above every page inside the shell: a couple of always-on
 // links on the left, a global search affordance in the middle, and the alerts
@@ -41,20 +44,11 @@ export function Topbar({
           ) : null}
         </nav>
 
-        <div className="mx-auto w-full max-w-md">
-          <label className="flex items-center gap-2 rounded-lg border border-cloud bg-paper px-3 py-2 text-sm text-muted-foreground focus-within:border-cobalt focus-within:ring-2 focus-within:ring-ring">
-            <Search className="size-4 shrink-0" aria-hidden />
-            <input
-              type="search"
-              placeholder="Search pupils, concerns, schools..."
-              aria-label="Search"
-              className="w-full bg-transparent text-ink outline-none placeholder:text-muted-foreground"
-            />
-            <kbd className="hidden shrink-0 rounded border border-cloud bg-card px-1.5 py-0.5 text-xs text-muted-foreground sm:inline">
-              ⌘K
-            </kbd>
-          </label>
-        </div>
+        <Suspense
+          fallback={<div className="mx-auto h-9 w-full max-w-md" />}
+        >
+          <SearchBox />
+        </Suspense>
 
         <Link
           href="/dashboard/alerts"

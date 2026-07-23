@@ -109,13 +109,16 @@ export default async function SchoolOverviewPage({
           value={data.metrics.activeConcerns}
           href={`/dashboard/school/${data.school.id}/triage/active`}
           icon={Flag}
+          tone="risk"
           footer={`${data.metrics.byLevel[3] + data.metrics.byLevel[4]} at action threshold`}
+          trend={data.metrics.trend}
         />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
           href={`/dashboard/school/${data.school.id}/triage/awaiting`}
           icon={Timer}
+          tone="warning"
           footer="Needs a DSL decision"
         />
         <KpiCard
