@@ -65,12 +65,20 @@ export default async function SchoolOverviewPage({
           </h1>
           <p className="mt-1 text-base italic text-cobalt">{data.school.name}</p>
         </div>
-        <ReportPanel
-          triggerLabel="Termly report"
-          title="Termly safeguarding report"
-          filename="termly-safeguarding-report.txt"
-          content={report}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/dashboard/school/${data.school.id}/documents`}
+            className="rounded-md border border-cloud px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-ink hover:text-ink"
+          >
+            Documents
+          </Link>
+          <ReportPanel
+            triggerLabel="Termly report"
+            title="Termly safeguarding report"
+            filename="termly-safeguarding-report.txt"
+            content={report}
+          />
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -10,6 +10,7 @@ import {
   type RiskPattern,
   type SchoolConfig,
 } from "../src/synthetic/generator";
+import { seedDocuments } from "./seed-documents";
 
 // Seeds the two design-partner schools with synthetic pupils and 12 months
 // of attendance / behaviour / attainment, including deliberately embedded
@@ -127,6 +128,9 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedSumma
         },
       });
     }
+
+    // Org document vault (policies, records) for this school.
+    await seedDocuments(tenant.id);
 
     // Re-seed from scratch: pupil rows cascade to attendance/behaviour/
     // attainment. Synthetic data only — this is safe by construction.
