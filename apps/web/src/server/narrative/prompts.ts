@@ -12,6 +12,22 @@ export type NarrativePrompt = {
   build(context: PseudonymisedContext): string;
 };
 
+// The deterministic fallback narrative (spec principle 9): a complete, sensible
+// advisory summary built from the pseudonymised context when the model is
+// unavailable. Never throws, never empty. UK English, no recommendations.
+export function buildFallbackNarrative(context: PseudonymisedContext): string {
+  const metrics = Object.entries(context.metrics)
+    .map(([key, value]) => `${key} ${value}`)
+    .join(", ");
+  const first = context.ruleSummary
+    ? context.ruleSummary
+    : `The rule "${context.ruleName}" fired for a pupil in year ${context.yearGroup} over ${context.windowStart} to ${context.windowEnd}.`;
+  const second = metrics
+    ? `The computed values behind this pattern were: ${metrics}. An experienced DSL may want to look at the underlying records for that window.`
+    : "An experienced DSL may want to look at the underlying records for that window.";
+  return `${first}\n\n${second}`;
+}
+
 export const SIGNAL_NARRATIVE_PROMPT: NarrativePrompt = {
   key: "signal-narrative",
   version: 1,

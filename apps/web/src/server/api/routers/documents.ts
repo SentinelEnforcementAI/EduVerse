@@ -8,8 +8,14 @@ import {
   dbForSchool,
   tenancyProcedure,
 } from "@/server/api/trpc";
+import { advise } from "@/server/advisory/advise";
+import {
+  enhanceSynthesis,
+  SEARCH_SYNTHESIS_PROMPT,
+} from "@/server/advisory/enhance";
 import { recordAuditEvent } from "@/server/audit";
 import { rankDocuments, synthesise } from "@/server/documents/search";
+import { getNarrativeModel } from "@/server/narrative/model-provider";
 
 function schoolFor(tenancy: Tenancy, schoolId: string | undefined) {
   const resolved =
@@ -87,9 +93,29 @@ export const documentsRouter = createTRPCRouter({
         metadata: { query: input.query, hits: hits.length },
       });
 
+      // Advisory synthesis over the results, with the deterministic summary as
+      // the fallback (spec step 15). The model, if reachable, only sees titles
+      // and themes.
+      const model = getNarrativeModel();
+      const synthesis = await advise(db, {
+        tenantId: school.id,
+        surface: "search-synthesis",
+        promptKey: SEARCH_SYNTHESIS_PROMPT.key,
+        promptVersion: SEARCH_SYNTHESIS_PROMPT.version,
+        input: input.query,
+        fallback: () => synthesise(input.query, hits),
+        enhance: () =>
+          enhanceSynthesis(
+            model,
+            input.query,
+            hits.map((h) => ({ title: h.title, matchedThemes: h.matchedThemes })),
+          ),
+      });
+
       return {
         query: input.query,
-        synthesis: synthesise(input.query, hits),
+        synthesis: synthesis.text,
+        synthesisSource: synthesis.source,
         hits: hits.slice(0, 50),
       };
     }),

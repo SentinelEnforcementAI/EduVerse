@@ -346,6 +346,31 @@ model KcsieEvidence {
   @@map("kcsie_evidence")
 }
 
+// A logged call to the advisory LLM layer (spec 6 data model / step 15). Every
+// advisory surface records the prompt key and version, a hash of the input
+// (never the input itself, which is pseudonymised anyway), whether the output
+// came from the model or the deterministic fallback, and the model id when the
+// model answered. Append-only: the record of what was asked and where the
+// answer came from is permanent. advisory is always true — this layer is never
+// authoritative.
+model LlmCall {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  surface       String
+  signalId      String?  @map("signal_id")
+  promptKey     String   @map("prompt_key")
+  promptVersion Int      @map("prompt_version")
+  inputHash     String   @map("input_hash")
+  source        String
+  modelId       String?  @map("model_id")
+  advisory      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@index([signalId, createdAt])
+  @@map("llm_calls")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.

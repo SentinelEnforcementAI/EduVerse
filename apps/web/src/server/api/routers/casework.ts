@@ -18,6 +18,9 @@ import {
 } from "@/server/escalation";
 import { REVEAL_REASONS, sealPupilRef } from "@/server/identity";
 import { decideSignal } from "@/server/signals/decide";
+import { advise } from "@/server/advisory/advise";
+import { COMMS_DRAFT_PROMPT, enhanceComms } from "@/server/advisory/enhance";
+import { getNarrativeModel } from "@/server/narrative/model-provider";
 import {
   buildDraft,
   COMM_META,
@@ -583,11 +586,8 @@ export const caseworkRouter = createTRPCRouter({
       });
       const reasoning = signal.reasoning as SignalReasoning;
       const source = sourceForRule(signal.ruleVersion.key);
-      const data: CaseDraftData = {
+      const base = {
         schoolName: school.name,
-        pupilRef: revealed
-          ? `${signal.pupil.firstName} ${signal.pupil.lastName}`
-          : sealPupilRef(signal.pupil.upn),
         yearGroup: signal.pupil.yearGroup,
         window: `${ukDate(signal.windowStart)} to ${ukDate(signal.windowEnd)}`,
         dsl: ctx.session.user.name ?? "The Designated Safeguarding Lead",
@@ -600,7 +600,31 @@ export const caseworkRouter = createTRPCRouter({
         })),
         overall: reasoning.summary,
       };
-      return { type: input.type, body: buildDraft(input.type, data) };
+      const sealedRef = sealPupilRef(signal.pupil.upn);
+      const data: CaseDraftData = {
+        ...base,
+        pupilRef: revealed
+          ? `${signal.pupil.firstName} ${signal.pupil.lastName}`
+          : sealedRef,
+      };
+      const sealedDraft = buildDraft(input.type, { ...base, pupilRef: sealedRef });
+
+      // Advisory enhancement over the deterministic draft (spec step 15). The
+      // model only ever sees the SEALED draft, so a revealed name is never sent
+      // to it; on a revealed case the enhancement is skipped and the
+      // name-bearing deterministic draft stands. Fallback on any failure.
+      const model = getNarrativeModel();
+      const result = await advise(db, {
+        tenantId: school.id,
+        surface: "comms-draft",
+        signalId: signal.id,
+        promptKey: COMMS_DRAFT_PROMPT.key,
+        promptVersion: COMMS_DRAFT_PROMPT.version,
+        input: sealedDraft,
+        fallback: () => buildDraft(input.type, data),
+        enhance: revealed ? undefined : () => enhanceComms(model, sealedDraft),
+      });
+      return { type: input.type, body: result.text, source: result.source };
     }),
 
   // File a (possibly edited) comm to the case as a document (spec 5.6). Written
