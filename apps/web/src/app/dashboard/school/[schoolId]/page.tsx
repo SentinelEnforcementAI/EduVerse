@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { TRPCError } from "@trpc/server";
@@ -74,10 +75,15 @@ export default async function SchoolOverviewPage({
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Pupils on roll" value={data.metrics.pupilsOnRoll} />
-        <KpiCard label="Active concerns" value={data.metrics.activeConcerns} />
+        <KpiCard
+          label="Active concerns"
+          value={data.metrics.activeConcerns}
+          href={`/dashboard/school/${data.school.id}/triage/active`}
+        />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
+          href={`/dashboard/school/${data.school.id}/triage/awaiting`}
         />
         <KpiCard label="Reviewed this term" value={data.metrics.reviewed} />
       </div>
@@ -97,22 +103,28 @@ export default async function SchoolOverviewPage({
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {data.patterns.map((pattern) => (
-            <Card key={pattern.id} className="p-5">
-              <div className="text-lg font-semibold">
-                {pattern.ref}{" "}
-                <span className="font-normal text-muted-foreground">
-                  · Year {pattern.yearGroup}
-                </span>
-              </div>
-              <div className="mt-2 text-base">{pattern.headline}</div>
-              <div className="mt-3 text-xs text-muted-foreground">
-                Observed to{" "}
-                {pattern.windowEnd.toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "long",
-                })}
-              </div>
-            </Card>
+            <Link
+              key={pattern.id}
+              href={`/dashboard/school/${data.school.id}/case/${pattern.id}`}
+              className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
+                <div className="text-lg font-semibold">
+                  {pattern.ref}{" "}
+                  <span className="font-normal text-muted-foreground">
+                    · Year {pattern.yearGroup}
+                  </span>
+                </div>
+                <div className="mt-2 text-base">{pattern.headline}</div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Observed to{" "}
+                  {pattern.windowEnd.toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "long",
+                  })}
+                </div>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

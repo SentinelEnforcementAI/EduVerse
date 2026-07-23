@@ -33,12 +33,17 @@ export default async function DashboardLayout({
     ? "Director of Safeguarding"
     : `DSL${tenancy.schools[0] ? `, ${tenancy.schools[0].name}` : ""}`;
 
-  const links: HeaderLink[] = isDirector
-    ? []
-    : [
-        { href: "/dashboard/signals", label: "Signals" },
-        { href: "/dashboard/audit", label: "Audit log" },
-      ];
+  const dslSchoolId = tenancy.schools[0]?.id;
+  const links: HeaderLink[] =
+    isDirector || !dslSchoolId
+      ? []
+      : [
+          {
+            href: `/dashboard/school/${dslSchoolId}/triage/active`,
+            label: "Triage",
+          },
+          { href: "/dashboard/audit", label: "Audit log" },
+        ];
 
   const displayName = session.user.name ?? session.user.email;
 

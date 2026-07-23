@@ -59,10 +59,15 @@ export default async function TrustOverviewPage() {
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Schools in trust" value={data.metrics.schools} />
         <KpiCard label="Pupils on roll" value={data.metrics.pupilsOnRoll} />
-        <KpiCard label="Active concerns" value={data.metrics.activeConcerns} />
+        <KpiCard
+          label="Active concerns"
+          value={data.metrics.activeConcerns}
+          href="/dashboard/trust/triage/active"
+        />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
+          href="/dashboard/trust/triage/awaiting"
         />
       </div>
 

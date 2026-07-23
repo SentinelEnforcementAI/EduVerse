@@ -1,5 +1,6 @@
 import { auditRouter } from "@/server/api/routers/audit";
 import { authRouter } from "@/server/api/routers/auth";
+import { caseworkRouter } from "@/server/api/routers/casework";
 import { healthRouter } from "@/server/api/routers/health";
 import { overviewRouter } from "@/server/api/routers/overview";
 import { signalsRouter } from "@/server/api/routers/signals";
@@ -15,6 +16,7 @@ export const appRouter = createTRPCRouter({
   signals: signalsRouter,
   audit: auditRouter,
   overview: overviewRouter,
+  casework: caseworkRouter,
 });
 
 export type AppRouter = typeof appRouter;
