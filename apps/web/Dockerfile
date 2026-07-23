@@ -1,6 +1,10 @@
 # Web app image (Next.js standalone). Build from the repo root:
 #   docker build -f apps/web/Dockerfile -t sentinel-watch-web .
 FROM node:22-slim AS base
+# Prisma detects the OpenSSL version at generate time — the build stage
+# needs it too, not just the runtime stage.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable pnpm
 WORKDIR /repo
 
