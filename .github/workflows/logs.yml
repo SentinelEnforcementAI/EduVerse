@@ -1,0 +1,47 @@
+# Ops: dump recent CloudWatch logs for a service into the workflow output.
+# Read-only; uses the same AWS credentials as bootstrap/deploy.
+name: Fetch service logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Which log group"
+        required: true
+        type: choice
+        options: [web, worker]
+        default: web
+      minutes:
+        description: "How many minutes back"
+        required: true
+        type: string
+        default: "60"
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Fetch logs
+        run: |
+          START=$(( ($(date +%s) - ${{ inputs.minutes }} * 60) * 1000 ))
+          aws logs filter-log-events \
+            --log-group-name "/ecs/$PROJECT/${{ inputs.service }}" \
+            --start-time "$START" \
+            --query 'events[].[timestamp,message]' \
+            --output text | while IFS=$'\t' read -r ts msg; do
+              printf '%s  %s\n' "$(date -u -d "@$((ts/1000))" '+%H:%M:%S')" "$msg"
+            done | tail -300
