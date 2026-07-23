@@ -6,6 +6,7 @@ import {
   isRevealable,
   LEVEL_META,
   sourceForRule,
+  timeToSurface,
 } from "@/server/escalation";
 
 describe("escalationLevel", () => {
@@ -42,6 +43,27 @@ describe("confidenceBand", () => {
     expect(confidenceBand(3)).toBe("Higher");
     expect(confidenceBand(2)).toBe("Moderate");
     expect(confidenceBand(1)).toBe("Emerging");
+  });
+});
+
+describe("timeToSurface", () => {
+  it("returns a positive figure within one cadence, with the right label", () => {
+    const first = new Date("2026-04-14");
+    const surfaced = new Date("2026-04-28"); // 14-day span
+    const t3 = timeToSurface(3, first, surfaced); // cadence 20
+    expect(t3.days).toBe(6);
+    expect(t3.cadenceLabel).toContain("multi-agency");
+
+    const t4 = timeToSurface(4, new Date("2026-04-23"), new Date("2026-04-28"));
+    // cadence 7, span 5 -> 2 days earlier; next scheduled safeguarding meeting.
+    expect(t4.days).toBe(2);
+    expect(t4.cadenceLabel).toContain("safeguarding meeting");
+  });
+
+  it("never returns zero or a negative figure, even for long patterns", () => {
+    const t = timeToSurface(1, new Date("2026-01-01"), new Date("2026-06-01"));
+    expect(t.days).toBeGreaterThan(0);
+    expect(t.days).toBeLessThanOrEqual(35);
   });
 });
 

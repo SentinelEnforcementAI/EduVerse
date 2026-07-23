@@ -96,6 +96,51 @@ export function confidenceBand(severity: number): string {
   return "Emerging";
 }
 
+// Time to surface (spec 5.5, and section 3: "computed and defensible, define the
+// method once"). The value Watch adds is LINKING signals that sit in separate
+// systems into one pattern the day the final signal lands; a routine review
+// would only connect them when it next convenes. The method:
+//
+//   A routine review runs on a cadence set by the level of need. Watch surfaces
+//   the pattern on the day of its last signal. The soonest an independent review
+//   would connect the same signals is one full cadence after the FIRST signal.
+//   The gap between that review and the day Watch surfaced it is how many days
+//   earlier Watch reached it. The figure is always between one day and one
+//   cadence, so it never overpromises.
+//
+// CTO-DECISION: the cadence per level is configurable per trust against their
+// local review schedule; these defaults are the working version.
+const CADENCE_DAYS: Record<EscalationLevel, number> = {
+  1: 35, // half-termly pastoral review
+  2: 35,
+  3: 20, // targeted, roughly monthly multi-agency review
+  4: 7, // statutory: the next scheduled safeguarding meeting
+};
+
+const CADENCE_LABEL: Record<EscalationLevel, string> = {
+  1: "routine half-termly pastoral review",
+  2: "routine half-termly pastoral review",
+  3: "half-termly multi-agency review",
+  4: "next scheduled safeguarding meeting",
+};
+
+export function timeToSurface(
+  level: EscalationLevel,
+  firstIndicator: Date,
+  surfacedOn: Date,
+): { days: number; cadenceLabel: string } {
+  const cadence = CADENCE_DAYS[level];
+  const dayMs = 86_400_000;
+  const spanDays = Math.max(
+    0,
+    Math.round((surfacedOn.getTime() - firstIndicator.getTime()) / dayMs),
+  );
+  // Days until the next routine review after the day Watch surfaced the pattern.
+  const remainder = spanDays % cadence;
+  const days = remainder === 0 ? cadence : cadence - remainder;
+  return { days, cadenceLabel: CADENCE_LABEL[level] };
+}
+
 // The source system a signal's evidence comes from, for timeline attribution
 // (spec 5.5 "What Watch sees"). Derived from the rule that fired. In the demo
 // this is written by hand (Attendance / SIMS etc.); here it is the real domain

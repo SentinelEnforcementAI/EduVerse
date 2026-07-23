@@ -127,14 +127,17 @@ export default async function CaseViewPage({
       </div>
 
       {/* Time to surface */}
-      {c.daysToSurface !== null ? (
+      {c.timeToSurface !== null ? (
         <Card className="mt-5 flex items-center gap-3 border-cobalt/30 bg-cobalt-tint p-4">
           <Clock className="size-5 shrink-0 text-cobalt" aria-hidden />
           <p className="text-sm">
-            Watch linked this pattern{" "}
-            <span className="font-semibold">{c.daysToSurface} days</span> after
-            the first indicator in the window, well before a routine review would
-            have reached it.
+            Watch linked{" "}
+            <span className="font-semibold">{c.signalsLinked} signals</span>{" "}
+            across {c.sources.length}{" "}
+            {c.sources.length === 1 ? "system" : "systems"} into one pattern, and
+            surfaced it{" "}
+            <span className="font-semibold">{c.timeToSurface.days} days</span>{" "}
+            before a {c.timeToSurface.cadenceLabel} would have connected them.
           </p>
         </Card>
       ) : null}

@@ -166,8 +166,10 @@ describe("casework.case", () => {
     expect(c.escalation.level).toBe(3);
     expect(c.escalation.route.length).toBeGreaterThan(0);
     expect(c.timeline[0]!.source).toBe("Attendance");
-    // 14 to 28 April: 14 days between first indicator and the window end.
-    expect(c.daysToSurface).toBe(14);
+    // Level 3 cadence is 20 days; a 14-day pattern surfaces 6 days before the
+    // next review would have connected the signals.
+    expect(c.timeToSurface?.days).toBe(6);
+    expect(c.timeToSurface?.cadenceLabel).toContain("multi-agency");
   });
 
   it("audits the read against the pupil's record", async () => {

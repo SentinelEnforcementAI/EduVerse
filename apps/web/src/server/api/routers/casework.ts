@@ -15,6 +15,7 @@ import {
   isRevealable,
   LEVEL_META,
   sourceForRule,
+  timeToSurface,
 } from "@/server/escalation";
 import { REVEAL_REASONS, sealPupilRef } from "@/server/identity";
 import { decideSignal } from "@/server/signals/decide";
@@ -209,24 +210,19 @@ export const caseworkRouter = createTRPCRouter({
       const level = escalationLevel(signal.severity, signal.serious);
       const source = sourceForRule(signal.ruleVersion.key);
 
-      // Time to surface (spec 5.5, method documented): the interval between the
-      // first underlying indicator in the window and the point Watch linked the
-      // pattern (the window end). This is the honest, defensible MVP figure.
-      // CTO-DECISION: the investor-facing "days earlier than manual review"
-      // claim needs a defined review cadence per trust; that layers on top.
+      // Time to surface (spec 5.5, method documented in escalation.ts): how many
+      // days earlier Watch linked this pattern than a routine review would have
+      // connected the same signals.
       const firstDate = reasoning.dataPoints
         .map((p) => p.date)
         .filter((d): d is string => Boolean(d))
         .sort()[0];
-      const daysToSurface = firstDate
-        ? Math.max(
-            0,
-            Math.round(
-              (signal.windowEnd.getTime() - new Date(firstDate).getTime()) /
-                86_400_000,
-            ),
-          )
+      const surface = firstDate
+        ? timeToSurface(level, new Date(firstDate), signal.windowEnd)
         : null;
+      const sources = [
+        ...new Set(reasoning.dataPoints.map((p) => p.src ?? source)),
+      ];
 
       // Linked context: the pupil's other open signals — real links only.
       const siblings = await db.signal.findMany({
@@ -334,7 +330,9 @@ export const caseworkRouter = createTRPCRouter({
         status: signal.status,
         confidence: confidenceBand(signal.severity),
         window: { start: signal.windowStart, end: signal.windowEnd },
-        daysToSurface,
+        timeToSurface: surface,
+        signalsLinked: reasoning.dataPoints.length,
+        sources,
         escalation: LEVEL_META[level],
         overall: reasoning.summary,
         interpretation: {
