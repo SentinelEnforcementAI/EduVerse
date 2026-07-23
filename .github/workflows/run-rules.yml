@@ -1,0 +1,76 @@
+# Ops: run the risk engine on demand as a one-off task, so signals appear
+# without waiting for the nightly 02:00 UTC sweep. Uses the worker image
+# (which contains the rules package) via the migrate task definition.
+name: Run rules engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenant:
+        description: "School slug, or 'all' for every school"
+        required: true
+        type: string
+        default: "all"
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  run-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run the engine
+        run: |
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=$PROJECT-private-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=$PROJECT-worker-*" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          if [ "${{ inputs.tenant }}" = "all" ]; then
+            TENANTS="downlands patcham"
+          else
+            TENANTS="${{ inputs.tenant }}"
+          fi
+
+          run_for() {
+            local slug="$1"
+            local overrides
+            overrides=$(cat <<JSON
+          {"containerOverrides":[{"name":"migrate","command":["pnpm","--filter","@sentinel/rules","exec","tsx","src/cli.ts","--tenant","$slug"]}]}
+          JSON
+            )
+            ARN=$(aws ecs run-task --cluster "$PROJECT" \
+              --task-definition "$PROJECT-migrate" --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+              --overrides "$overrides" \
+              --query 'tasks[0].taskArn' --output text)
+            echo "$slug engine task: $ARN"
+            aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$ARN"
+            TASK_ID="${ARN##*/}"
+            EXIT=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$ARN" \
+              --query 'tasks[0].containers[0].exitCode' --output text)
+            echo "--- $slug engine logs ---"
+            aws logs get-log-events \
+              --log-group-name "/ecs/$PROJECT/worker" \
+              --log-stream-name "migrate/migrate/$TASK_ID" \
+              --limit 100 --query 'events[].message' --output text 2>/dev/null || true
+            echo "--- end ---"
+            [ "$EXIT" = "0" ] || { echo "$slug engine failed (exit $EXIT)"; return 1; }
+          }
+
+          rc=0
+          for t in $TENANTS; do run_for "$t" || rc=1; done
+          exit $rc
