@@ -9,6 +9,8 @@ const tenantUser: User = {
   id: "user_1",
   email: "dsl@downlands.example.org.uk",
   name: "Test DSL",
+  role: "DSL",
+  trustId: null,
   tenantId: "tenant_a",
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -20,6 +22,7 @@ function tenantContext(tenantDb: unknown): TRPCContext {
     session: { sessionId: "sess_1", user: tenantUser },
     tenantId: "tenant_a",
     tenantDb: tenantDb as TRPCContext["tenantDb"],
+    tenancy: null,
     headers: new Headers(),
   };
 }
@@ -54,6 +57,7 @@ describe("audit.list", () => {
       session: null,
       tenantId: null,
       tenantDb: null,
+      tenancy: null,
       headers: new Headers(),
     });
     await expect(caller.audit.list()).rejects.toMatchObject({
@@ -61,7 +65,7 @@ describe("audit.list", () => {
     });
   });
 
-  it("resolves names, labels missing pupils, and audits the view", async () => {
+  it("resolves sealed refs, labels missing pupils, and audits the view", async () => {
     const auditCreate = vi.fn().mockResolvedValue({});
     const tenantDb = {
       auditEvent: {
@@ -85,9 +89,7 @@ describe("audit.list", () => {
       pupil: {
         findMany: vi
           .fn()
-          .mockResolvedValue([
-            { id: "pupil_1", firstName: "Ada", lastName: "Lovelace" },
-          ]),
+          .mockResolvedValue([{ id: "pupil_1", upn: "SW-DOW-0001" }]),
       },
     };
 
@@ -99,10 +101,11 @@ describe("audit.list", () => {
       "signal.decided",
       "signal.viewed",
     ]);
+    // The audit log shows the sealed reference, never the pupil's name.
     expect(result.events[0]).toMatchObject({
       action: "signal.viewed",
       user: "Test DSL",
-      pupil: "Ada Lovelace",
+      pupil: "Pupil 0001",
     });
     // Unknown user id resolves to a label, deleted pupil is reported.
     expect(result.events[1]).toMatchObject({

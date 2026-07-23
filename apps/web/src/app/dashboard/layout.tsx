@@ -1,18 +1,32 @@
 import { redirect } from "next/navigation";
+import {
+  Bell,
+  Building2,
+  FileBarChart,
+  FileText,
+  Flag,
+  FolderOpen,
+  LayoutDashboard,
+  LineChart,
+  ScrollText,
+  SearchCheck,
+  ShieldCheck,
+} from "lucide-react";
 
-import { dbForTenant } from "@sentinel/db";
+import { resolveTenancy } from "@sentinel/db";
 
-import { BrandLockup } from "@/components/brand";
-import { Button } from "@/components/ui/button";
 import { getAuthSession } from "@/server/auth/session";
+import { serverApi } from "@/trpc/server";
 
-import { DashboardNav } from "./nav";
+import { ShellFooter } from "./shell/footer";
+import { Sidebar, type NavItem, type QuickAction } from "./shell/sidebar";
+import { Topbar } from "./shell/topbar";
 
-export const metadata = { title: "Dashboard" };
+export const metadata = { title: "Sentinel Watch" };
 
-// Protected area. DESIGN.md v2 layout: white sidebar with the brand
-// lock-up, cobalt tint on the active item, org context pinned at the
-// bottom; content on paper, 24px gutters, max width 1440px.
+// The application shell (spec section 4): a persistent left sidebar frames every
+// screen, with a top bar for search and alerts and a footer on paper. One shell
+// everywhere, so navigation, identity and quick actions are always in reach.
 export default async function DashboardLayout({
   children,
 }: {
@@ -23,40 +37,143 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
-  const tenant = session.user.tenantId
-    ? await dbForTenant(session.user.tenantId).tenant.findUnique({
-        where: { id: session.user.tenantId },
-      })
-    : null;
+  const tenancy = await resolveTenancy(session.user);
+  const isDirector = tenancy.mode === "mat";
+  const roleLabel = isDirector
+    ? "Director of Safeguarding"
+    : `DSL${tenancy.schools[0] ? `, ${tenancy.schools[0].name}` : ""}`;
+
+  const api = await serverApi();
+  const counts = await api.overview.counts();
+
+  const dslSchoolId = tenancy.schools[0]?.id;
+  const schoolBase = dslSchoolId
+    ? `/dashboard/school/${dslSchoolId}`
+    : "/dashboard";
+
+  // Role-appropriate navigation. A director oversees the trust; a DSL works
+  // within their one school. Every item lands on a surface that exists.
+  const nav: NavItem[] = isDirector
+    ? [
+        {
+          href: "/dashboard/trust",
+          label: "Trust overview",
+          icon: LayoutDashboard,
+        },
+        { href: "/dashboard/schools", label: "Schools", icon: Building2 },
+        {
+          href: "/dashboard/trust/triage/active",
+          label: "Concerns",
+          icon: Flag,
+          badge: counts.concerns,
+          match: "/dashboard/trust/triage",
+        },
+        { href: "/dashboard/reports", label: "Reports", icon: FileBarChart },
+        { href: "/dashboard/insights", label: "Insights", icon: LineChart },
+        {
+          href: "/dashboard/alerts",
+          label: "Alerts",
+          icon: Bell,
+          badge: counts.alerts,
+        },
+        {
+          href: "/dashboard/governance",
+          label: "Governance",
+          icon: ShieldCheck,
+        },
+        { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
+        {
+          href: "/dashboard/trust/inspection",
+          label: "Inspection",
+          icon: SearchCheck,
+        },
+      ]
+    : [
+        {
+          href: schoolBase,
+          label: "Overview",
+          icon: LayoutDashboard,
+          match: schoolBase,
+        },
+        {
+          href: `${schoolBase}/triage/active`,
+          label: "Concerns",
+          icon: Flag,
+          badge: counts.concerns,
+          match: `${schoolBase}/triage`,
+        },
+        {
+          href: `${schoolBase}/documents`,
+          label: "Documents",
+          icon: FolderOpen,
+        },
+        {
+          href: "/dashboard/alerts",
+          label: "Alerts",
+          icon: Bell,
+          badge: counts.alerts,
+        },
+        { href: `${schoolBase}/kcsie`, label: "KCSIE", icon: FileText },
+        {
+          href: `${schoolBase}/inspection`,
+          label: "Inspection",
+          icon: SearchCheck,
+        },
+        {
+          href: "/dashboard/governance",
+          label: "Governance",
+          icon: ShieldCheck,
+        },
+        { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
+      ];
+
+  const quickActions: QuickAction[] = isDirector
+    ? [
+        {
+          href: "/dashboard/trust/triage/awaiting",
+          label: "Review queue",
+          icon: Flag,
+        },
+        { href: "/dashboard/reports", label: "Generate report", icon: FileText },
+        {
+          href: "/dashboard/insights",
+          label: "Explore insights",
+          icon: LineChart,
+        },
+      ]
+    : [
+        {
+          href: `${schoolBase}/triage/awaiting`,
+          label: "Review queue",
+          icon: Flag,
+        },
+        {
+          href: `${schoolBase}/documents`,
+          label: "Read a document",
+          icon: FolderOpen,
+        },
+        { href: "/dashboard/reports", label: "Generate report", icon: FileText },
+      ];
+
+  const displayName = session.user.name ?? session.user.email;
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-60 shrink-0 flex-col border-r bg-card">
-        <div className="px-6 pb-6 pt-7">
-          <BrandLockup markVariant="cobalt" />
-        </div>
-        <DashboardNav />
-        <div className="mt-auto flex flex-col gap-3 border-t px-6 py-5">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-base font-medium">
-              {tenant ? tenant.name : "No school assigned yet"}
-            </span>
-            <span className="break-all text-xs text-muted-foreground">
-              {session.user.email}
-            </span>
+      <Sidebar
+        nav={nav}
+        quickActions={quickActions}
+        name={displayName}
+        roleLabel={roleLabel}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar showSwitch={isDirector} alertsCount={counts.alerts} />
+        <main className="flex-1">
+          <div className="mx-auto w-full max-w-[1200px] px-6 py-8">
+            {children}
           </div>
-          <form action="/api/auth/sign-out" method="post">
-            <Button type="submit" variant="secondary" size="sm" className="w-full">
-              Sign out
-            </Button>
-          </form>
-        </div>
-      </aside>
-      <main className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-[1440px] px-6 py-8">
-          {children}
-        </div>
-      </main>
+        </main>
+        <ShellFooter />
+      </div>
     </div>
   );
 }

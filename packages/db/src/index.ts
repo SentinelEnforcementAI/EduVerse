@@ -52,7 +52,7 @@ export const systemDb = withRlsContext("app.context", "system");
 export type TenantDb = ReturnType<typeof dbForTenant>;
 export type SystemDb = typeof systemDb;
 
-import type { Prisma } from "@prisma/client";
+import type { Prisma, UserRole } from "@prisma/client";
 
 // Atomic multi-statement work under the RLS system context. The per-operation
 // clients above wrap each call in its own transaction; use this when several
@@ -66,4 +66,80 @@ export async function systemTransaction<T>(
     await tx.$executeRaw`SELECT set_config('app.context', 'system', TRUE)`;
     return fn(tx);
   });
+}
+
+// ── Tenancy resolution (single school vs Multi-Academy Trust) ───────────────
+
+// The two tenancy modes the product has (spec section 4 / 5.1): a single
+// school, or a Multi-Academy Trust with school-level drill-down.
+export type TenancyMode = "school" | "mat";
+
+// A school a user is allowed to see. A director gets every school in their
+// trust; a DSL gets exactly their own. Callers read each school's pupil data
+// through dbForTenant(school.id), so the database's per-school row-level
+// security remains the enforcement boundary — this list only decides which
+// school contexts a request may open.
+export type AccessibleSchool = {
+  id: string;
+  name: string;
+  slug: string;
+  trustId: string | null;
+};
+
+export type Tenancy = {
+  mode: TenancyMode;
+  trustId: string | null;
+  schools: AccessibleSchool[];
+};
+
+// The minimal user shape the resolver needs — kept structural so the web
+// session type satisfies it without importing Prisma model types.
+export type TenancyUser = {
+  role: UserRole;
+  tenantId: string | null;
+  trustId: string | null;
+};
+
+const TENANCY_SCHOOL_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  trustId: true,
+} as const;
+
+// Resolves the set of schools a user may read.
+//
+// The query goes through systemDb but is strictly filtered by the user's OWN
+// tenantId / trustId taken from their authenticated session — a director can
+// only ever list schools whose trust_id equals their own trust, and a DSL only
+// their own school. There is no path here to another tenant's or trust's
+// rows. CTO-DECISION: a dedicated app.trust_id RLS context would push the
+// director's "schools of my trust" scope down into the database itself; the
+// application-level filter is the simplest working version for the MVP.
+export async function resolveAccessibleSchools(
+  user: TenancyUser,
+): Promise<AccessibleSchool[]> {
+  if (user.role === "DIRECTOR" && user.trustId) {
+    return systemDb.tenant.findMany({
+      where: { trustId: user.trustId },
+      orderBy: { name: "asc" },
+      select: TENANCY_SCHOOL_SELECT,
+    });
+  }
+  if (user.tenantId) {
+    const school = await systemDb.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: TENANCY_SCHOOL_SELECT,
+    });
+    return school ? [school] : [];
+  }
+  return [];
+}
+
+// Resolves a user's full tenancy: mode, trust, and accessible schools.
+export async function resolveTenancy(user: TenancyUser): Promise<Tenancy> {
+  const schools = await resolveAccessibleSchools(user);
+  const mode: TenancyMode =
+    user.role === "DIRECTOR" && user.trustId ? "mat" : "school";
+  return { mode, trustId: user.trustId, schools };
 }

@@ -20,19 +20,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// A tenant is a school (Downlands, Patcham) or, later, a trust.
-// CTO-DECISION: MAT hierarchy (trust → schools, MAT-level users spanning
-// schools). Flat tenants are the simplest working version for the two
-// design-partner schools; nesting can be added without breaking tenant_id.
+// A Multi-Academy Trust: the grouping a set of schools belongs to. Watch's
+// second tenancy mode (spec 5.1). A trust does NOT carry pupil data itself —
+// every child's record still lives under exactly one school (the Tenant).
+//
+// CTO-DECISION: MAT hierarchy shape. The simplest working version keeps the
+// school as THE tenant (tenant_id stays the RLS key on every table, so the
+// entire tested isolation foundation holds unchanged) and adds Trust purely as
+// a grouping over school-tenants. A trust-level user reads by fanning out
+// across the trust's schools, each through its own tenant RLS context — never
+// a "see everything" path. A dedicated trust RLS context (app.trust_id) is the
+// later hardening; it is not needed for the design-partner MVP.
+model Trust {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  schools Tenant[]
+  users   User[]
+
+  @@map("trusts")
+}
+
+// A tenant is a school (Bennett Memorial, Rusthall Academy). Pupil data always
+// belongs to exactly one tenant; tenant_id is the row-level-security key on
+// every table. A tenant optionally belongs to a Trust (nullable trust_id) — a
+// standalone single school has none.
 model Tenant {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  // The Multi-Academy Trust this school belongs to, if any. NULL for a
+  // standalone single school (the demo's "Single school" tenancy mode).
+  trustId   String?  @map("trust_id")
   // Wonde school identifier once the tenant is linked to a (sandbox) school.
   wondeSchoolId String? @unique @map("wonde_school_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  trust              Trust?             @relation(fields: [trustId], references: [id])
   users              User[]
   pupils             Pupil[]
   attendanceRecords  AttendanceRecord[]
@@ -164,6 +192,185 @@ model SignalNarrative {
   @@map("signal_narratives")
 }
 
+// A case note a DSL records against a signal, optionally tagging colleagues at
+// the school. Append-only like decisions and narratives: a safeguarding note,
+// once written, is part of the record — no edits, no hard deletes. tagged_user_ids
+// holds the ids of colleagues notified; the reveal of a pupil's identity is not
+// recorded here but in the audit trail, so a note never carries a name.
+model CaseNote {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  signalId      String   @map("signal_id")
+  pupilId       String   @map("pupil_id")
+  authorId      String   @map("author_id")
+  body          String
+  taggedUserIds String[] @map("tagged_user_ids")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("case_notes")
+}
+
+enum DocumentScope {
+  ORG
+  CASE
+}
+
+// A document in the Watch repository (spec 5.9). Two scopes: org-level (the
+// vault — policies, records, generated reports) and case-level (documents
+// filed against a signal, e.g. a drafted comm or a MASH response). Case
+// documents carry the sealed pupil reference via signal/pupil ids, never a
+// name. Not hard-deletable: the RLS migration grants SELECT/INSERT/UPDATE only,
+// so a safeguarding document is never removed (spec principle 3), only
+// superseded by status.
+model Document {
+  id        String        @id @default(cuid())
+  tenantId  String        @map("tenant_id")
+  scope     DocumentScope
+  signalId  String?       @map("signal_id")
+  pupilId   String?       @map("pupil_id")
+  title     String
+  // Referral, Letter, Note, Assessment, Record, Chronology, Policy, Report,
+  // Return, Training. A free string, not an enum, so document kinds can grow
+  // without a migration.
+  type      String
+  docDate   DateTime      @map("doc_date")
+  status    String        @default("Filed")
+  themes    String[]
+  summary   String
+  content   String
+  generated Boolean       @default(false)
+  source    String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@index([tenantId, scope, docDate])
+  @@index([signalId, createdAt])
+  @@map("documents")
+}
+
+// An action on a case file (spec 5.7). The checklist is seeded from the case's
+// recommended route when the file is opened; a DSL works through it. Toggleable
+// (done flips), so RLS grants UPDATE, but no DELETE — a task is never removed.
+model CaseTask {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  signalId  String   @map("signal_id")
+  pupilId   String   @map("pupil_id")
+  label     String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("case_tasks")
+}
+
+// A scheduled pastoral review on a case (spec 5.8). Append-only: a scheduled
+// review is part of the record. attendees holds the tagged colleagues' ids.
+model CaseReview {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  signalId     String   @map("signal_id")
+  pupilId      String   @map("pupil_id")
+  scheduledFor String   @map("scheduled_for")
+  attendees    String[]
+  note         String?
+  createdById  String   @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("case_reviews")
+}
+
+// A referral to the multi-agency safeguarding hub (spec 5.10 / step 10). One
+// per case. The stage advances (submitted, chased, decided, re-referred), so
+// RLS grants UPDATE; there is no DELETE. Watch never submits to MASH itself —
+// the school submits; this records the lifecycle.
+model Referral {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  signalId    String   @unique @map("signal_id")
+  pupilId     String   @map("pupil_id")
+  stage       String   @default("submitted")
+  decision    String?
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, createdAt])
+  @@map("referrals")
+}
+
+// An event on a referral's timeline (spec 5.10). Append-only.
+model ReferralEvent {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  referralId String   @map("referral_id")
+  occurredOn String   @map("occurred_on")
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([referralId, createdAt])
+  @@map("referral_events")
+}
+
+// A task in a KCSIE component workspace (spec 5.13). component_key identifies
+// which of the seven components. Toggleable, so RLS grants UPDATE; no DELETE.
+model KcsieTask {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  componentKey String   @map("component_key")
+  label        String
+  done         Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, componentKey])
+  @@map("kcsie_tasks")
+}
+
+// Evidence attached to a KCSIE component (spec 5.13): a link to a vault
+// document. Append-only.
+model KcsieEvidence {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  componentKey String   @map("component_key")
+  documentId   String   @map("document_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, componentKey, documentId])
+  @@map("kcsie_evidence")
+}
+
+// A logged call to the advisory LLM layer (spec 6 data model / step 15). Every
+// advisory surface records the prompt key and version, a hash of the input
+// (never the input itself, which is pseudonymised anyway), whether the output
+// came from the model or the deterministic fallback, and the model id when the
+// model answered. Append-only: the record of what was asked and where the
+// answer came from is permanent. advisory is always true — this layer is never
+// authoritative.
+model LlmCall {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  surface       String
+  signalId      String?  @map("signal_id")
+  promptKey     String   @map("prompt_key")
+  promptVersion Int      @map("prompt_version")
+  inputHash     String   @map("input_hash")
+  source        String
+  modelId       String?  @map("model_id")
+  advisory      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@index([signalId, createdAt])
+  @@map("llm_calls")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.
@@ -185,6 +392,9 @@ model Signal {
   executionId   String       @map("execution_id")
   status        SignalStatus @default(OPEN)
   severity      Int
+  // A signal flagged serious (e.g. a disclosure) is escalation level 4 and
+  // revealable regardless of the numeric severity (spec section 7).
+  serious       Boolean      @default(false)
   title         String
   reasoning     Json
   windowStart   DateTime     @map("window_start") @db.Date
@@ -345,7 +555,18 @@ model AttainmentRecord {
   @@map("attainment_records")
 }
 
-// A user of the platform (DSL, pastoral staff, MAT-level user).
+// How a user is scoped. A school DSL sees one school; a trust director sees
+// across the schools of their trust (spec 5.1, escalation-level identity
+// rules unchanged by this).
+// CTO-DECISION: fuller RBAC (deputy DSL, pastoral, admin, per-permission
+// grants). Two roles are the simplest working version that expresses the two
+// tenancy modes the product actually has today.
+enum UserRole {
+  DSL
+  DIRECTOR
+}
+
+// A user of the platform (a school DSL, or a trust Director of Safeguarding).
 // Auth is email magic link for MVP. The schema is deliberately provider-agnostic
 // (no password column, no provider-specific columns) so WorkOS / school SSO can
 // replace magic links later without a schema change: an SSO provider only needs
@@ -354,21 +575,26 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
-  // CTO-DECISION: user roles (DSL / deputy / MAT-level / admin) and how they map
-  // to permissions. Simplest working version: no role column yet; every signed-in
-  // user is treated as a DSL for the design-partner MVP.
-  // CTO-DECISION: tenant membership model (single school vs MAT-level users who
-  // span schools). Nullable single tenant_id is the simplest working version.
-  // NULL tenant_id = platform-level user, visible only to the system context.
+  role      UserRole @default(DSL)
+  // Exactly one of tenantId / trustId is set for an operational user:
+  //   DSL      → tenant_id  (their school), trust_id NULL
+  //   DIRECTOR → trust_id   (their trust),  tenant_id NULL
+  // A director reads each of their trust's schools through that school's own
+  // tenant RLS context (see @sentinel/db resolveAccessibleSchools); there is
+  // no cross-tenant read path. NULL tenant_id + NULL trust_id = platform-level
+  // user, visible only to the system context.
   tenantId  String?  @map("tenant_id")
+  trustId   String?  @map("trust_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   tenant          Tenant?          @relation(fields: [tenantId], references: [id])
+  trust           Trust?           @relation(fields: [trustId], references: [id])
   magicLinkTokens MagicLinkToken[]
   sessions        Session[]
 
   @@index([tenantId])
+  @@index([trustId])
 
   @@map("users")
 }

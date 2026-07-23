@@ -42,6 +42,7 @@ function caller() {
     session: { sessionId: "sess_test", user: dsl },
     tenantId: tenant.id,
     tenantDb: dbForTenant(tenant.id),
+    tenancy: null,
     headers: new Headers(),
   };
   return createCaller(ctx);
@@ -55,6 +56,8 @@ beforeAll(async () => {
     data: {
       email: `dsl-${run}@hitl.test`,
       name: "Test DSL",
+      role: "DSL",
+      trustId: null,
       tenantId: tenant.id,
     },
   });

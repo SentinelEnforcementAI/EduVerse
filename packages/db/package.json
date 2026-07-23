@@ -16,7 +16,9 @@
     "db:deploy:prod": "prisma migrate deploy",
     "user:add:prod": "tsx scripts/user-add.ts",
     "db:seed:prod": "tsx prisma/seed.ts",
-    "app-role:prod": "tsx scripts/create-app-role.ts"
+    "app-role:prod": "tsx scripts/create-app-role.ts",
+    "db:seed:demo": "dotenv -e ../../.env -- tsx scripts/seed-demo.ts",
+    "db:seed:demo:prod": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2"

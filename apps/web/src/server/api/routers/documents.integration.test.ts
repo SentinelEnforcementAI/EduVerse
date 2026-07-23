@@ -1,0 +1,132 @@
+import { randomUUID } from "node:crypto";
+
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { dbForTenant, resolveTenancy, systemDb, type User } from "@sentinel/db";
+
+import { createCaller } from "@/server/api/root";
+import type { TRPCContext } from "@/server/api/trpc";
+
+// Documents vault, contextual search, viewer and evidence pack against the real
+// database, with RLS isolation between schools.
+
+const run = randomUUID().slice(0, 8);
+
+let schoolAId: string;
+let otherSchoolId: string;
+let dsl: User;
+
+async function ctxFor(user: User): Promise<TRPCContext> {
+  const tenancy = await resolveTenancy(user);
+  return {
+    db: systemDb,
+    session: { sessionId: `s-${run}`, user },
+    tenantId: user.tenantId,
+    tenantDb: user.tenantId ? dbForTenant(user.tenantId) : null,
+    tenancy,
+    headers: new Headers(),
+  };
+}
+
+beforeAll(async () => {
+  const a = await systemDb.tenant.create({
+    data: { name: "Downlands", slug: `doc-a-${run}` },
+  });
+  const o = await systemDb.tenant.create({
+    data: { name: "Elsewhere", slug: `doc-o-${run}` },
+  });
+  schoolAId = a.id;
+  otherSchoolId = o.id;
+  dsl = await systemDb.user.create({
+    data: { email: `doc-dsl-${run}@a.test`, role: "DSL", tenantId: schoolAId },
+  });
+
+  await systemDb.document.create({
+    data: {
+      tenantId: schoolAId,
+      scope: "ORG",
+      title: "Online Safety and Filtering Policy",
+      type: "Policy",
+      docDate: new Date("2025-09-12"),
+      status: "Current",
+      themes: ["online safety", "filtering"],
+      summary: "Online incident response.",
+      content:
+        "Where a child discloses contact from an unknown adult, staff preserve evidence and escalate to the DSL.",
+      source: "seed",
+    },
+  });
+  await systemDb.document.create({
+    data: {
+      tenantId: schoolAId,
+      scope: "ORG",
+      title: "Attendance Strategy",
+      type: "Policy",
+      docDate: new Date("2026-01-09"),
+      status: "Current",
+      themes: ["attendance", "welfare"],
+      summary: "Persistent absence.",
+      content:
+        "A young carer with caring responsibilities may show a pattern of lateness.",
+      source: "seed",
+    },
+  });
+});
+
+afterAll(async () => {
+  const ids = [schoolAId, otherSchoolId];
+  await systemDb.auditEvent.deleteMany({ where: { tenantId: { in: ids } } });
+  await systemDb.document.deleteMany({ where: { tenantId: { in: ids } } });
+  await systemDb.user.deleteMany({ where: { id: dsl.id } });
+  await systemDb.tenant.deleteMany({ where: { id: { in: ids } } });
+});
+
+describe("documents.vault", () => {
+  it("lists the school's org documents", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    const vault = await caller.documents.vault({});
+    expect(vault.documents.length).toBe(2);
+  });
+});
+
+describe("documents.search", () => {
+  it("finds a document by its content and explains the match, audited", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    // "young carer" appears only in the attendance doc's body.
+    const result = await caller.documents.search({ query: "young carer" });
+    expect(result.hits).toHaveLength(1);
+    expect(result.hits[0]!.title).toBe("Attendance Strategy");
+    expect(result.synthesis).toContain("Found");
+
+    const events = await dbForTenant(schoolAId).auditEvent.findMany({
+      where: { action: "documents.searched" },
+    });
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it("matches themes, not filenames", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    const result = await caller.documents.search({ query: "filtering" });
+    expect(result.hits[0]!.matchedThemes).toContain("filtering");
+  });
+});
+
+describe("documents.evidencePack", () => {
+  it("assembles a generated pack from the vault", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    const pack = await caller.documents.evidencePack({});
+    const doc = await caller.documents.byId({ id: pack.id });
+    expect(doc.title).toBe("Inspection Evidence Pack");
+    expect(doc.content).toContain("Downlands");
+    expect(doc.content).not.toContain("—");
+  });
+});
+
+describe("RLS", () => {
+  it("keeps documents scoped to their school", async () => {
+    const docs = await dbForTenant(otherSchoolId).document.findMany({
+      where: { tenantId: schoolAId },
+    });
+    expect(docs).toHaveLength(0);
+  });
+});

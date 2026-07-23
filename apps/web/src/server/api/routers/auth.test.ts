@@ -9,6 +9,8 @@ const testUser: User = {
   id: "user_1",
   email: "dsl@downlands.example.org.uk",
   name: "Test DSL",
+  role: "DSL",
+  trustId: null,
   tenantId: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -20,6 +22,7 @@ function contextWith(overrides: Partial<TRPCContext>): TRPCContext {
     session: null,
     tenantId: null,
     tenantDb: null,
+    tenancy: null,
     headers: new Headers(),
     ...overrides,
   };

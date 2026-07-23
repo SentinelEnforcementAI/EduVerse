@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { systemTransaction, type TenantDb } from "@sentinel/db";
 
 import type { NarrativeModel } from "./bedrock";
-import { SIGNAL_NARRATIVE_PROMPT } from "./prompts";
+import { buildFallbackNarrative, SIGNAL_NARRATIVE_PROMPT } from "./prompts";
 import { assertPseudonymised, buildPseudonymisedContext } from "./pseudonymise";
 
 export type GenerateNarrativeInput = {
@@ -65,7 +65,22 @@ export async function generateNarrative(
     signal.pupil.upn,
   ]);
 
-  const { text, modelId } = await model.generate(prompt.system, userMessage);
+  // Advisory, with a deterministic fallback (spec principle 9). If the model
+  // times out, errors, or is unavailable, a complete deterministic narrative is
+  // stored and labelled as not AI-generated. A DSL never sees an error.
+  let text: string;
+  let modelId: string;
+  let aiGenerated: boolean;
+  try {
+    const result = await model.generate(prompt.system, userMessage);
+    text = result.text;
+    modelId = result.modelId;
+    aiGenerated = true;
+  } catch {
+    text = buildFallbackNarrative(context);
+    modelId = "deterministic-fallback";
+    aiGenerated = false;
+  }
 
   const narrativeId = await systemTransaction(async (tx) => {
     const narrative = await tx.signalNarrative.create({
@@ -74,7 +89,7 @@ export async function generateNarrative(
         signalId: signal.id,
         pupilId: signal.pupilId,
         content: text,
-        aiGenerated: true,
+        aiGenerated,
         promptKey: prompt.key,
         promptVersion: prompt.version,
         modelId,

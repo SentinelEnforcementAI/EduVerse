@@ -10,6 +10,8 @@ import {
   type RiskPattern,
   type SchoolConfig,
 } from "../src/synthetic/generator";
+import { seedHeroCases } from "./seed-cases";
+import { seedDocuments } from "./seed-documents";
 
 // Seeds the two design-partner schools with synthetic pupils and 12 months
 // of attendance / behaviour / attainment, including deliberately embedded
@@ -26,6 +28,7 @@ export type SeedOptions = {
 };
 
 export type SeedSummary = {
+  trust: { slug: string; name: string; trustId: string; director: string };
   schools: {
     slug: string;
     name: string;
@@ -38,9 +41,25 @@ export type SeedSummary = {
   }[];
 };
 
+// All names here are synthetic. The two design-partner schools (Downlands,
+// Patcham, per CLAUDE.md) are grouped under one Multi-Academy Trust so both
+// tenancy modes — single school and MAT — have real data behind them. The
+// trust name is invented for the demo; it is not a real organisation.
+const TRUST = { slug: "weald-learning-trust", name: "Weald Learning Trust" };
+const DIRECTOR = {
+  email: "director@weald-learning-trust.example",
+  name: "Trust Director of Safeguarding",
+};
+
+// A fuller synthetic trust so the demo trust overview and cross-school views
+// are populated. Downlands and Patcham are the design-partner schools (CLAUDE.md);
+// the rest are invented for breadth. Downlands is the flagship for the hero cases.
 const SCHOOLS = [
-  { slug: "downlands", name: "Downlands", seed: 1001 },
-  { slug: "patcham", name: "Patcham", seed: 2002 },
+  { slug: "downlands", name: "Downlands", seed: 1001, flagship: true },
+  { slug: "patcham", name: "Patcham", seed: 2002, flagship: false },
+  { slug: "coastdown", name: "Coastdown Academy", seed: 3003, flagship: false },
+  { slug: "meridian", name: "Meridian High", seed: 4004, flagship: false },
+  { slug: "ashgrove", name: "Ashgrove Primary", seed: 5005, flagship: false },
 ];
 
 const CHUNK = 100;
@@ -51,25 +70,74 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedSumma
   const anchorDate = options.anchorDate ?? new Date();
   const log = options.log ?? (() => undefined);
 
-  const summary: SeedSummary = { schools: [] };
+  // The Multi-Academy Trust both schools belong to. A trust carries no pupil
+  // data itself — every child stays under a school (tenant) — so the MAT
+  // reframe leaves per-school row-level security untouched.
+  const trust = await systemDb.trust.upsert({
+    where: { slug: TRUST.slug },
+    update: { name: TRUST.name },
+    create: { name: TRUST.name, slug: TRUST.slug },
+  });
+
+  // Trust Director of Safeguarding: sees across every school in the trust
+  // (spec 5.1). Scoped by trustId, no single tenant.
+  await systemDb.user.upsert({
+    where: { email: DIRECTOR.email },
+    update: { role: "DIRECTOR", trustId: trust.id, tenantId: null },
+    create: {
+      email: DIRECTOR.email,
+      name: DIRECTOR.name,
+      role: "DIRECTOR",
+      trustId: trust.id,
+    },
+  });
+
+  const summary: SeedSummary = {
+    trust: {
+      slug: TRUST.slug,
+      name: TRUST.name,
+      trustId: trust.id,
+      director: DIRECTOR.email,
+    },
+    schools: [],
+  };
 
   for (const school of SCHOOLS) {
     const tenant = await systemDb.tenant.upsert({
       where: { slug: school.slug },
-      update: { name: school.name },
-      create: { name: school.name, slug: school.slug },
+      update: { name: school.name, trustId: trust.id },
+      create: { name: school.name, slug: school.slug, trustId: trust.id },
     });
 
-    // Dev DSL account per school so the dashboard is usable immediately.
-    await systemDb.user.upsert({
-      where: { email: `dsl@${school.slug}.example` },
-      update: { tenantId: tenant.id },
-      create: {
-        email: `dsl@${school.slug}.example`,
-        name: `${school.name} DSL`,
-        tenantId: tenant.id,
+    // Dev DSL account per school so the school view is usable immediately,
+    // plus a couple of colleagues so notes can tag someone. All roles are DSL
+    // for the MVP (see the User role CTO-DECISION); the names distinguish them.
+    const staff = [
+      { email: `dsl@${school.slug}.example`, name: `${school.name} DSL` },
+      {
+        email: `ddsl@${school.slug}.example`,
+        name: `${school.name} Deputy DSL`,
       },
-    });
+      {
+        email: `pastoral@${school.slug}.example`,
+        name: `${school.name} Pastoral Lead`,
+      },
+    ];
+    for (const member of staff) {
+      await systemDb.user.upsert({
+        where: { email: member.email },
+        update: { role: "DSL", tenantId: tenant.id, trustId: null },
+        create: {
+          email: member.email,
+          name: member.name,
+          role: "DSL",
+          tenantId: tenant.id,
+        },
+      });
+    }
+
+    // Org document vault (policies, records) for this school.
+    await seedDocuments(tenant.id);
 
     // Re-seed from scratch: pupil rows cascade to attendance/behaviour/
     // attainment. Synthetic data only — this is safe by construction.
@@ -162,6 +230,10 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedSumma
       log(`${school.name}: seeded ${start + count}/${pupilsPerSchool} pupils`);
     }
 
+    // Hand-crafted hero cases (the flagship school also gets the serious
+    // Level 4 disclosure that drives the reveal and referral demo).
+    await seedHeroCases(tenant.id, { flagship: school.flagship });
+
     summary.schools.push({
       slug: school.slug,
       name: school.name,
@@ -213,7 +285,9 @@ if (isDirectRun) {
         (manifestWritten
           ? `\nEmbedded risk pupils written to ${manifestPath}`
           : "") +
-          `\nSign in locally as dsl@downlands.example or dsl@patcham.example`,
+          `\n${summary.trust.name} seeded with ${summary.schools.length} schools.` +
+          `\nSign in locally as a school DSL (dsl@downlands.example or` +
+          ` dsl@patcham.example) or as the trust director (${summary.trust.director}).`,
       );
       await systemDb.$disconnect();
     })
