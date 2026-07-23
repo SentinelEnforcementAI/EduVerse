@@ -65,7 +65,7 @@ describe("audit.list", () => {
     });
   });
 
-  it("resolves names, labels missing pupils, and audits the view", async () => {
+  it("resolves sealed refs, labels missing pupils, and audits the view", async () => {
     const auditCreate = vi.fn().mockResolvedValue({});
     const tenantDb = {
       auditEvent: {
@@ -89,9 +89,7 @@ describe("audit.list", () => {
       pupil: {
         findMany: vi
           .fn()
-          .mockResolvedValue([
-            { id: "pupil_1", firstName: "Ada", lastName: "Lovelace" },
-          ]),
+          .mockResolvedValue([{ id: "pupil_1", upn: "SW-DOW-0001" }]),
       },
     };
 
@@ -103,10 +101,11 @@ describe("audit.list", () => {
       "signal.decided",
       "signal.viewed",
     ]);
+    // The audit log shows the sealed reference, never the pupil's name.
     expect(result.events[0]).toMatchObject({
       action: "signal.viewed",
       user: "Test DSL",
-      pupil: "Ada Lovelace",
+      pupil: "Pupil 0001",
     });
     // Unknown user id resolves to a label, deleted pupil is reported.
     expect(result.events[1]).toMatchObject({

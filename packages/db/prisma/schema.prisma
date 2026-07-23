@@ -192,6 +192,26 @@ model SignalNarrative {
   @@map("signal_narratives")
 }
 
+// A case note a DSL records against a signal, optionally tagging colleagues at
+// the school. Append-only like decisions and narratives: a safeguarding note,
+// once written, is part of the record — no edits, no hard deletes. tagged_user_ids
+// holds the ids of colleagues notified; the reveal of a pupil's identity is not
+// recorded here but in the audit trail, so a note never carries a name.
+model CaseNote {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  signalId      String   @map("signal_id")
+  pupilId       String   @map("pupil_id")
+  authorId      String   @map("author_id")
+  body          String
+  taggedUserIds String[] @map("tagged_user_ids")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("case_notes")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.

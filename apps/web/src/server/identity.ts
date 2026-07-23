@@ -12,3 +12,15 @@ export function sealPupilRef(upn: string): string {
   const tail = digits.slice(-4) || digits || "0000";
   return `Pupil ${tail}`;
 }
+
+// The only reasons a DSL may give for revealing a pupil's identity. A reveal is
+// never casual: it is warranted by a concrete safeguarding action, and the
+// chosen reason is written to the audit trail with the reveal (spec principle
+// 2 / section 7). A closed list keeps the reason auditable and consistent.
+export const REVEAL_REASONS = [
+  "Required for a referral",
+  "Required for parental contact",
+  "Safeguarding decision recorded",
+] as const;
+
+export type RevealReason = (typeof REVEAL_REASONS)[number];

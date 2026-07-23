@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import type { SignalStatus, TenantDb } from "@sentinel/db";
+import { systemTransaction, type SignalStatus, type TenantDb } from "@sentinel/db";
 
 import {
   createTRPCRouter,
@@ -12,10 +12,29 @@ import { recordAuditEvent } from "@/server/audit";
 import {
   confidenceBand,
   escalationLevel,
+  isRevealable,
   LEVEL_META,
   sourceForRule,
 } from "@/server/escalation";
-import { sealPupilRef } from "@/server/identity";
+import { REVEAL_REASONS, sealPupilRef } from "@/server/identity";
+import { decideSignal } from "@/server/signals/decide";
+
+// Resolves the school a case action targets: a DSL's single school, or the
+// school a director names. Shared by the case query and every mutation.
+function resolveSchoolId(
+  tenancy: { mode: "school" | "mat"; schools: { id: string }[] },
+  schoolId: string | undefined,
+): string {
+  const resolved =
+    schoolId ?? (tenancy.mode === "school" ? tenancy.schools[0]?.id : undefined);
+  if (!resolved) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Choose a school for this case.",
+    });
+  }
+  return resolved;
+}
 
 // The triage keys that map to a real, honest filter over signal status. The
 // demo has more (flagged this week, MASH) that depend on features not yet
@@ -118,22 +137,25 @@ export const caseworkRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      // A DSL is scoped to their one school; a director must name the school.
-      const schoolId =
-        input.schoolId ??
-        (ctx.tenancy.mode === "school" ? ctx.tenancy.schools[0]?.id : undefined);
-      if (!schoolId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Choose a school to open this case.",
-        });
-      }
-      const { school, db } = dbForSchool(ctx.tenancy, schoolId);
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
 
       const signal = await db.signal.findUnique({
         where: { id: input.signalId },
         include: {
-          pupil: { select: { id: true, upn: true, yearGroup: true } },
+          // firstName / lastName are read but only ever RETURNED once the case
+          // is revealed (below) — never on a sealed case.
+          pupil: {
+            select: {
+              id: true,
+              upn: true,
+              yearGroup: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
           ruleVersion: { select: { key: true, name: true } },
         },
       });
@@ -182,6 +204,33 @@ export const caseworkRouter = createTRPCRouter({
         take: 50,
       });
 
+      // Identity: sealed by default. Revealed only if a reveal has been
+      // recorded (an audit event), and only then is the name returned.
+      const revealed = auditEvents.some(
+        (e) => e.action === "pupil.identity.revealed",
+      );
+      const revealable = isRevealable(level);
+
+      // Case notes (append-only), with author and tagged-colleague names
+      // resolved from the school's own directory.
+      const notes = await db.caseNote.findMany({
+        where: { signalId: signal.id },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+      const referencedUserIds = [
+        ...new Set(notes.flatMap((n) => [n.authorId, ...n.taggedUserIds])),
+      ];
+      const users = referencedUserIds.length
+        ? await db.user.findMany({
+            where: { id: { in: referencedUserIds } },
+            select: { id: true, name: true, email: true },
+          })
+        : [];
+      const nameById = new Map(
+        users.map((u) => [u.id, u.name ?? u.email]),
+      );
+
       await recordAuditEvent(db, {
         tenantId: school.id,
         userId: ctx.session.user.id,
@@ -192,9 +241,18 @@ export const caseworkRouter = createTRPCRouter({
       });
 
       return {
+        signalId: signal.id,
         schoolId: school.id,
         schoolName: school.name,
         ref: sealPupilRef(signal.pupil.upn),
+        // The name is present ONLY when the case has been revealed; otherwise
+        // it never leaves the server.
+        pupilName: revealed
+          ? `${signal.pupil.firstName} ${signal.pupil.lastName}`
+          : null,
+        revealed,
+        revealable,
+        revealReasons: REVEAL_REASONS,
         yearGroup: signal.pupil.yearGroup,
         headline: signal.title,
         status: signal.status,
@@ -215,11 +273,163 @@ export const caseworkRouter = createTRPCRouter({
           source,
         })),
         linked: siblings.map((s) => ({ id: s.id, headline: s.title })),
+        notes: notes.map((n) => ({
+          id: n.id,
+          body: n.body,
+          author: nameById.get(n.authorId) ?? "A colleague",
+          tagged: n.taggedUserIds
+            .map((id) => nameById.get(id))
+            .filter((name): name is string => Boolean(name)),
+          createdAt: n.createdAt,
+        })),
         audit: auditEvents.map((e) => ({
           id: e.id,
           action: e.action,
           createdAt: e.createdAt,
         })),
       };
+    }),
+
+  // Colleagues at the school, for tagging on a note (spec 5.5 notes). Excludes
+  // the caller; sealed data only (names, never pupil data).
+  directory: tenancyProcedure
+    .input(z.object({ schoolId: z.string().min(1).optional() }))
+    .query(async ({ ctx, input }) => {
+      const { db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const users = await db.user.findMany({
+        where: { id: { not: ctx.session.user.id } },
+        select: { id: true, name: true, email: true },
+        orderBy: { createdAt: "asc" },
+        take: 50,
+      });
+      return users.map((u) => ({ id: u.id, name: u.name ?? u.email }));
+    }),
+
+  // Reveal a pupil's identity (spec principle 2 / section 7). Gated: only once
+  // the case reaches the action threshold (level 3+, or serious). A reason is
+  // required and written to the audit trail with the reveal.
+  reveal: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+        reason: z.enum(REVEAL_REASONS),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const signal = await db.signal.findUnique({
+        where: { id: input.signalId },
+        select: { id: true, severity: true, pupilId: true },
+      });
+      if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!isRevealable(escalationLevel(signal.severity))) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Identity stays sealed until the case reaches the action threshold (level 3 or above).",
+        });
+      }
+      await recordAuditEvent(db, {
+        tenantId: school.id,
+        userId: ctx.session.user.id,
+        action: "pupil.identity.revealed",
+        entityType: "signal",
+        entityId: signal.id,
+        pupilId: signal.pupilId,
+        metadata: { reason: input.reason },
+      });
+      return { ok: true };
+    }),
+
+  // Dismiss a signal with a reason (spec 5.4 / principle 3). Reuses the audited,
+  // atomic decision workflow; a reason of at least five characters is required
+  // and becomes part of the safeguarding record.
+  dismiss: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+        reason: z.string().min(5).max(2000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      return decideSignal(db, {
+        tenantId: school.id,
+        userId: ctx.session.user.id,
+        signalId: input.signalId,
+        kind: "DISMISS",
+        note: input.reason,
+      });
+    }),
+
+  // Add a case note, optionally tagging colleagues (spec 5.5). Append-only and
+  // audited; the note and its audit entry are written atomically. A note never
+  // carries a name — identity lives in the (sealed) pupil record, not the note.
+  addNote: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+        body: z.string().trim().min(1).max(4000),
+        taggedUserIds: z.array(z.string()).max(20).default([]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const signal = await db.signal.findUnique({
+        where: { id: input.signalId },
+        select: { id: true, pupilId: true },
+      });
+      if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Only colleagues who really belong to this school may be tagged.
+      const tagged = input.taggedUserIds.length
+        ? await db.user.findMany({
+            where: { id: { in: input.taggedUserIds } },
+            select: { id: true },
+          })
+        : [];
+      const taggedIds = tagged.map((u) => u.id);
+
+      const userId = ctx.session.user.id;
+      const noteId = await systemTransaction(async (tx) => {
+        const note = await tx.caseNote.create({
+          data: {
+            tenantId: school.id,
+            signalId: signal.id,
+            pupilId: signal.pupilId,
+            authorId: userId,
+            body: input.body,
+            taggedUserIds: taggedIds,
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            tenantId: school.id,
+            userId,
+            action: "case.note.added",
+            entityType: "signal",
+            entityId: signal.id,
+            pupilId: signal.pupilId,
+            metadata: { taggedCount: taggedIds.length },
+          },
+        });
+        return note.id;
+      });
+      return { id: noteId };
     }),
 });

@@ -101,17 +101,32 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedSumma
       create: { name: school.name, slug: school.slug, trustId: trust.id },
     });
 
-    // Dev DSL account per school so the school view is usable immediately.
-    await systemDb.user.upsert({
-      where: { email: `dsl@${school.slug}.example` },
-      update: { role: "DSL", tenantId: tenant.id, trustId: null },
-      create: {
-        email: `dsl@${school.slug}.example`,
-        name: `${school.name} DSL`,
-        role: "DSL",
-        tenantId: tenant.id,
+    // Dev DSL account per school so the school view is usable immediately,
+    // plus a couple of colleagues so notes can tag someone. All roles are DSL
+    // for the MVP (see the User role CTO-DECISION); the names distinguish them.
+    const staff = [
+      { email: `dsl@${school.slug}.example`, name: `${school.name} DSL` },
+      {
+        email: `ddsl@${school.slug}.example`,
+        name: `${school.name} Deputy DSL`,
       },
-    });
+      {
+        email: `pastoral@${school.slug}.example`,
+        name: `${school.name} Pastoral Lead`,
+      },
+    ];
+    for (const member of staff) {
+      await systemDb.user.upsert({
+        where: { email: member.email },
+        update: { role: "DSL", tenantId: tenant.id, trustId: null },
+        create: {
+          email: member.email,
+          name: member.name,
+          role: "DSL",
+          tenantId: tenant.id,
+        },
+      });
+    }
 
     // Re-seed from scratch: pupil rows cascade to attendance/behaviour/
     // attainment. Synthetic data only — this is safe by construction.

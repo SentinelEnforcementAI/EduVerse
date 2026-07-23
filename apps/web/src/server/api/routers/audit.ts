@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, tenantProcedure } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
+import { sealPupilRef } from "@/server/identity";
 
 const PAGE_SIZE = 50;
 
@@ -45,13 +46,17 @@ export const auditRouter = createTRPCRouter({
         pupilIds.length
           ? ctx.tenantDb.pupil.findMany({
               where: { id: { in: pupilIds } },
-              select: { id: true, firstName: true, lastName: true },
+              // Sealed reference only — the audit log identifies a child by
+              // their sealed reference, never their name (spec principle 2).
+              // The name lives in the pupil record; the reveal of it is itself
+              // one of the audited actions listed here.
+              select: { id: true, upn: true },
             })
           : [],
       ]);
       const usersById = new Map(users.map((u) => [u.id, u.name ?? u.email]));
       const pupilsById = new Map(
-        pupils.map((p) => [p.id, `${p.firstName} ${p.lastName}`]),
+        pupils.map((p) => [p.id, sealPupilRef(p.upn)]),
       );
 
       await recordAuditEvent(ctx.tenantDb, {

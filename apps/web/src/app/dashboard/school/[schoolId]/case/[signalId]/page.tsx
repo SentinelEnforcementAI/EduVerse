@@ -9,6 +9,12 @@ import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../../../shell/breadcrumbs";
 import { LevelChip } from "../../../../shell/level-chip";
+import {
+  DismissForm,
+  NoteForm,
+  RevealControl,
+  SealedNotice,
+} from "./case-actions";
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("en-GB", {
@@ -54,6 +60,7 @@ export default async function CaseViewPage({
     throw error;
   }
 
+  const colleagues = await api.casework.directory({ schoolId });
   const isDirector = tenancy.mode === "mat";
 
   return (
@@ -80,17 +87,31 @@ export default async function CaseViewPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">{c.ref}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {c.revealed && c.pupilName ? c.pupilName : c.ref}
+            </h1>
             <LevelChip level={c.escalation.level} />
           </div>
           <p className="mt-1 text-base text-muted-foreground">
-            Year {c.yearGroup} · {c.schoolName} · Identity sealed
+            Year {c.yearGroup} · {c.schoolName} ·{" "}
+            {c.revealed ? `Identity revealed (${c.ref})` : "Identity sealed"}
           </p>
           <p className="mt-3 text-lg font-medium">{c.headline}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             {c.confidence} confidence · Observed {formatDate(c.window.start)} to{" "}
             {formatDate(c.window.end)}
           </p>
+        </div>
+        <div className="shrink-0">
+          {c.revealed ? null : c.revealable ? (
+            <RevealControl
+              signalId={c.signalId}
+              schoolId={c.schoolId}
+              reasons={c.revealReasons}
+            />
+          ) : (
+            <SealedNotice />
+          )}
         </div>
       </div>
 
@@ -164,10 +185,65 @@ export default async function CaseViewPage({
               <p className="text-sm leading-relaxed">{c.overall}</p>
             </Card>
           </section>
+
+          <section>
+            <h2 className="text-xl font-semibold">Case notes</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Notes are part of the safeguarding record. Tag a colleague to
+              notify them.
+            </p>
+            <div className="mt-3">
+              <NoteForm
+                signalId={c.signalId}
+                schoolId={c.schoolId}
+                colleagues={colleagues}
+              />
+            </div>
+            {c.notes.length > 0 ? (
+              <ul className="mt-4 flex flex-col gap-3">
+                {c.notes.map((note) => (
+                  <li key={note.id}>
+                    <Card className="p-4">
+                      <p className="text-sm leading-relaxed">{note.body}</p>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {note.author} ·{" "}
+                        {note.createdAt.toLocaleString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {note.tagged.length > 0
+                          ? ` · tagged ${note.tagged.join(", ")}`
+                          : ""}
+                      </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
         </div>
 
         {/* Context column */}
         <div className="flex flex-col gap-6">
+          <Card className="p-5">
+            <h3 className="text-base font-semibold">Decision</h3>
+            {c.status === "OPEN" ? (
+              <div className="mt-3">
+                <p className="mb-3 text-sm text-muted-foreground">
+                  The decision is yours. Watch never closes a case.
+                </p>
+                <DismissForm signalId={c.signalId} schoolId={c.schoolId} />
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                This case has been {c.status.toLowerCase()} and recorded to the
+                audit trail.
+              </p>
+            )}
+          </Card>
+
           <Card className="p-5">
             <h3 className="text-base font-semibold">Escalation</h3>
             <div className="mt-3">
