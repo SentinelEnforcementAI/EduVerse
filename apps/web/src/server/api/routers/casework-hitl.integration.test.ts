@@ -103,6 +103,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const ids = [schoolAId, otherSchoolId];
+  await systemDb.caseReview.deleteMany({ where: { tenantId: { in: ids } } });
+  await systemDb.caseTask.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.document.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.caseNote.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.auditEvent.deleteMany({ where: { tenantId: { in: ids } } });
@@ -250,5 +252,79 @@ describe("comms (draft and file)", () => {
       where: { signalId: level3SignalId },
     });
     expect(docs).toHaveLength(0);
+  });
+});
+
+describe("case file and pastoral review", () => {
+  it("opens a case file with a checklist from the route, audited", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    const result = await caller.casework.openCaseFile({
+      signalId: level2SignalId,
+    });
+    expect(result.created).toBeGreaterThan(0);
+
+    const c = await caller.casework.case({ signalId: level2SignalId });
+    expect(c.caseFile.opened).toBe(true);
+    expect(c.caseFile.total).toBe(result.created);
+
+    // Opening again is idempotent.
+    const again = await caller.casework.openCaseFile({
+      signalId: level2SignalId,
+    });
+    expect(again.created).toBe(0);
+
+    const events = await dbForTenant(schoolAId).auditEvent.findMany({
+      where: { action: "case.file.opened", entityId: level2SignalId },
+    });
+    expect(events.length).toBe(1);
+  });
+
+  it("toggles a checklist task and audits completion", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    const c = await caller.casework.case({ signalId: level2SignalId });
+    const task = c.caseFile.tasks[0]!;
+    const res = await caller.casework.toggleCaseTask({ taskId: task.id });
+    expect(res.done).toBe(true);
+
+    const after = await caller.casework.case({ signalId: level2SignalId });
+    expect(after.caseFile.done).toBe(1);
+
+    const events = await dbForTenant(schoolAId).auditEvent.findMany({
+      where: { action: "case.task.completed", entityId: level2SignalId },
+    });
+    expect(events.length).toBe(1);
+  });
+
+  it("schedules a pastoral review with an attendee, audited", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    await caller.casework.scheduleReview({
+      signalId: level3SignalId,
+      scheduledFor: "2026-05-06T10:00",
+      attendees: [colleague.id],
+      note: "Review progress after the parental contact.",
+    });
+
+    const c = await caller.casework.case({ signalId: level3SignalId });
+    expect(c.reviews).toHaveLength(1);
+    expect(c.reviews[0]!.scheduledFor).toBe("2026-05-06T10:00");
+    expect(c.reviews[0]!.attendees).toContain("A Deputy");
+
+    const events = await dbForTenant(schoolAId).auditEvent.findMany({
+      where: { action: "case.review.scheduled", entityId: level3SignalId },
+    });
+    expect(events.length).toBe(1);
+  });
+
+  it("keeps tasks and reviews scoped to their school (RLS)", async () => {
+    const [tasks, reviews] = await Promise.all([
+      dbForTenant(otherSchoolId).caseTask.findMany({
+        where: { signalId: level2SignalId },
+      }),
+      dbForTenant(otherSchoolId).caseReview.findMany({
+        where: { signalId: level3SignalId },
+      }),
+    ]);
+    expect(tasks).toHaveLength(0);
+    expect(reviews).toHaveLength(0);
   });
 });

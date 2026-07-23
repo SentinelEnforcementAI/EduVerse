@@ -250,6 +250,42 @@ model Document {
   @@map("documents")
 }
 
+// An action on a case file (spec 5.7). The checklist is seeded from the case's
+// recommended route when the file is opened; a DSL works through it. Toggleable
+// (done flips), so RLS grants UPDATE, but no DELETE — a task is never removed.
+model CaseTask {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  signalId  String   @map("signal_id")
+  pupilId   String   @map("pupil_id")
+  label     String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("case_tasks")
+}
+
+// A scheduled pastoral review on a case (spec 5.8). Append-only: a scheduled
+// review is part of the record. attendees holds the tagged colleagues' ids.
+model CaseReview {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  signalId     String   @map("signal_id")
+  pupilId      String   @map("pupil_id")
+  scheduledFor String   @map("scheduled_for")
+  attendees    String[]
+  note         String?
+  createdById  String   @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("case_reviews")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.

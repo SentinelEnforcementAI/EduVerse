@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Brain, Clock, Link2, ScrollText } from "lucide-react";
+import {
+  Brain,
+  CalendarClock,
+  Clock,
+  FolderOpen,
+  Link2,
+  ScrollText,
+} from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -16,6 +23,7 @@ import {
   SealedNotice,
 } from "./case-actions";
 import { CommsPanel } from "./case-comms";
+import { CaseFilePanel, ReviewScheduler } from "./case-file";
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("en-GB", {
@@ -284,6 +292,35 @@ export default async function CaseViewPage({
                 audit trail.
               </p>
             )}
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="size-4 text-muted-foreground" aria-hidden />
+              <h3 className="text-base font-semibold">Case file</h3>
+            </div>
+            <div className="mt-3">
+              <CaseFilePanel
+                signalId={c.signalId}
+                schoolId={c.schoolId}
+                caseFile={c.caseFile}
+              />
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center gap-2">
+              <CalendarClock className="size-4 text-muted-foreground" aria-hidden />
+              <h3 className="text-base font-semibold">Pastoral review</h3>
+            </div>
+            <div className="mt-3">
+              <ReviewScheduler
+                signalId={c.signalId}
+                schoolId={c.schoolId}
+                colleagues={colleagues}
+                reviews={c.reviews}
+              />
+            </div>
           </Card>
 
           <Card className="p-5">

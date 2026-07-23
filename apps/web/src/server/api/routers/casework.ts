@@ -228,15 +228,36 @@ export const caseworkRouter = createTRPCRouter({
       );
       const revealable = isRevealable(level);
 
-      // Case notes (append-only), with author and tagged-colleague names
-      // resolved from the school's own directory.
-      const notes = await db.caseNote.findMany({
-        where: { signalId: signal.id },
-        orderBy: { createdAt: "desc" },
-        take: 100,
-      });
+      // Case notes (append-only), the filed documents (spec 5.6), the case
+      // file checklist (spec 5.7) and the scheduled reviews (spec 5.8).
+      const [notes, documents, tasks, reviews] = await Promise.all([
+        db.caseNote.findMany({
+          where: { signalId: signal.id },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+        }),
+        db.document.findMany({
+          where: { signalId: signal.id, scope: "CASE" },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        }),
+        db.caseTask.findMany({
+          where: { signalId: signal.id },
+          orderBy: { createdAt: "asc" },
+        }),
+        db.caseReview.findMany({
+          where: { signalId: signal.id },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+
+      // Names of everyone referenced (note authors and tags, review attendees
+      // and schedulers), resolved from the school's own directory.
       const referencedUserIds = [
-        ...new Set(notes.flatMap((n) => [n.authorId, ...n.taggedUserIds])),
+        ...new Set([
+          ...notes.flatMap((n) => [n.authorId, ...n.taggedUserIds]),
+          ...reviews.flatMap((r) => [r.createdById, ...r.attendees]),
+        ]),
       ];
       const users = referencedUserIds.length
         ? await db.user.findMany({
@@ -244,16 +265,7 @@ export const caseworkRouter = createTRPCRouter({
             select: { id: true, name: true, email: true },
           })
         : [];
-      const nameById = new Map(
-        users.map((u) => [u.id, u.name ?? u.email]),
-      );
-
-      // Documents filed against this case (spec 5.6 comms file here).
-      const documents = await db.document.findMany({
-        where: { signalId: signal.id, scope: "CASE" },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      });
+      const nameById = new Map(users.map((u) => [u.id, u.name ?? u.email]));
 
       await recordAuditEvent(db, {
         tenantId: school.id,
@@ -319,6 +331,22 @@ export const caseworkRouter = createTRPCRouter({
           label: COMM_META[t].label,
           blurb: COMM_META[t].blurb,
           primary: COMM_META[t].primary ?? false,
+        })),
+        caseFile: {
+          opened: tasks.length > 0,
+          tasks: tasks.map((t) => ({ id: t.id, label: t.label, done: t.done })),
+          done: tasks.filter((t) => t.done).length,
+          total: tasks.length,
+        },
+        reviews: reviews.map((r) => ({
+          id: r.id,
+          scheduledFor: r.scheduledFor,
+          note: r.note,
+          attendees: r.attendees
+            .map((id) => nameById.get(id))
+            .filter((name): name is string => Boolean(name)),
+          by: nameById.get(r.createdById) ?? "A colleague",
+          createdAt: r.createdAt,
         })),
         audit: auditEvents.map((e) => ({
           id: e.id,
@@ -591,5 +619,158 @@ export const caseworkRouter = createTRPCRouter({
         return doc.id;
       });
       return { id: docId };
+    }),
+
+  // Open the case file (spec 5.7): seed the checklist from the case's
+  // recommended route plus the standard closing steps. Idempotent, audited.
+  openCaseFile: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const signal = await db.signal.findUnique({
+        where: { id: input.signalId },
+        select: { id: true, pupilId: true, severity: true },
+      });
+      if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const existing = await db.caseTask.count({
+        where: { signalId: signal.id },
+      });
+      if (existing > 0) return { opened: true, created: 0 };
+
+      const level = escalationLevel(signal.severity);
+      const labels = [
+        ...LEVEL_META[level].route,
+        "Record the outcome and set a review date",
+      ];
+      const userId = ctx.session.user.id;
+      const created = await systemTransaction(async (tx) => {
+        await tx.caseTask.createMany({
+          data: labels.map((label) => ({
+            tenantId: school.id,
+            signalId: signal.id,
+            pupilId: signal.pupilId,
+            label,
+          })),
+        });
+        await tx.auditEvent.create({
+          data: {
+            tenantId: school.id,
+            userId,
+            action: "case.file.opened",
+            entityType: "signal",
+            entityId: signal.id,
+            pupilId: signal.pupilId,
+            metadata: { steps: labels.length },
+          },
+        });
+        return labels.length;
+      });
+      return { opened: true, created };
+    }),
+
+  // Toggle a checklist task done or not done (spec 5.7). Completing a task is
+  // audited; reopening it is left unaudited to keep the trail signal-heavy.
+  toggleCaseTask: tenancyProcedure
+    .input(
+      z.object({
+        taskId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const task = await db.caseTask.findUnique({
+        where: { id: input.taskId },
+        select: { id: true, signalId: true, pupilId: true, done: true, label: true },
+      });
+      if (!task) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const done = !task.done;
+      await db.caseTask.update({ where: { id: task.id }, data: { done } });
+      if (done) {
+        await recordAuditEvent(db, {
+          tenantId: school.id,
+          userId: ctx.session.user.id,
+          action: "case.task.completed",
+          entityType: "signal",
+          entityId: task.signalId,
+          pupilId: task.pupilId,
+          metadata: { task: task.label },
+        });
+      }
+      return { done };
+    }),
+
+  // Schedule a pastoral review with optional attendees (spec 5.8). Append-only
+  // and audited.
+  scheduleReview: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+        scheduledFor: z.string().trim().min(1).max(200),
+        attendees: z.array(z.string()).max(20).default([]),
+        note: z.string().trim().max(2000).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const signal = await db.signal.findUnique({
+        where: { id: input.signalId },
+        select: { id: true, pupilId: true },
+      });
+      if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const attendees = input.attendees.length
+        ? (
+            await db.user.findMany({
+              where: { id: { in: input.attendees } },
+              select: { id: true },
+            })
+          ).map((u) => u.id)
+        : [];
+
+      const userId = ctx.session.user.id;
+      const reviewId = await systemTransaction(async (tx) => {
+        const review = await tx.caseReview.create({
+          data: {
+            tenantId: school.id,
+            signalId: signal.id,
+            pupilId: signal.pupilId,
+            scheduledFor: input.scheduledFor,
+            attendees,
+            note: input.note ?? null,
+            createdById: userId,
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            tenantId: school.id,
+            userId,
+            action: "case.review.scheduled",
+            entityType: "signal",
+            entityId: signal.id,
+            pupilId: signal.pupilId,
+            metadata: { scheduledFor: input.scheduledFor, attendees: attendees.length },
+          },
+        });
+        return review.id;
+      });
+      return { id: reviewId };
     }),
 });
