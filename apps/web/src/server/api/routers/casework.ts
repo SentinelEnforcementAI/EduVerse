@@ -267,6 +267,21 @@ export const caseworkRouter = createTRPCRouter({
         : [];
       const nameById = new Map(users.map((u) => [u.id, u.name ?? u.email]));
 
+      // Referral lifecycle (spec 5.10): available once the case is serious
+      // enough to reveal identity. CTO-DECISION: the demo gates referral at
+      // level 4 or serious; here it follows the reveal threshold (level 3+), so
+      // a DSL can refer any case serious enough to warrant it.
+      const canRefer = isRevealable(level);
+      const referral = canRefer
+        ? await db.referral.findUnique({ where: { signalId: signal.id } })
+        : null;
+      const referralEvents = referral
+        ? await db.referralEvent.findMany({
+            where: { referralId: referral.id },
+            orderBy: { createdAt: "asc" },
+          })
+        : [];
+
       await recordAuditEvent(db, {
         tenantId: school.id,
         userId: ctx.session.user.id,
@@ -337,6 +352,17 @@ export const caseworkRouter = createTRPCRouter({
           tasks: tasks.map((t) => ({ id: t.id, label: t.label, done: t.done })),
           done: tasks.filter((t) => t.done).length,
           total: tasks.length,
+        },
+        referral: {
+          canRefer,
+          submitted: referral !== null,
+          stage: referral?.stage ?? null,
+          decision: referral?.decision ?? null,
+          events: referralEvents.map((e) => ({
+            id: e.id,
+            occurredOn: e.occurredOn,
+            text: e.text,
+          })),
         },
         reviews: reviews.map((r) => ({
           id: r.id,
@@ -772,5 +798,139 @@ export const caseworkRouter = createTRPCRouter({
         return review.id;
       });
       return { id: reviewId };
+    }),
+
+  // Submit a MASH referral (spec 5.10). Watch never submits to MASH itself;
+  // this records that the school has, and starts the lifecycle. One per case,
+  // gated to cases serious enough to reveal identity. Audited.
+  submitReferral: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const signal = await db.signal.findUnique({
+        where: { id: input.signalId },
+        select: { id: true, pupilId: true, severity: true },
+      });
+      if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!isRevealable(escalationLevel(signal.severity))) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "This case is not at the threshold for a referral.",
+        });
+      }
+      const existing = await db.referral.findUnique({
+        where: { signalId: signal.id },
+        select: { id: true },
+      });
+      if (existing) return { submitted: true };
+
+      const userId = ctx.session.user.id;
+      await systemTransaction(async (tx) => {
+        const referral = await tx.referral.create({
+          data: {
+            tenantId: school.id,
+            signalId: signal.id,
+            pupilId: signal.pupilId,
+            stage: "submitted",
+            createdById: userId,
+          },
+        });
+        await tx.referralEvent.create({
+          data: {
+            tenantId: school.id,
+            referralId: referral.id,
+            occurredOn: ukDate(new Date()),
+            text: "Referral submitted to MASH",
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            tenantId: school.id,
+            userId,
+            action: "referral.submitted",
+            entityType: "signal",
+            entityId: signal.id,
+            pupilId: signal.pupilId,
+          },
+        });
+      });
+      return { submitted: true };
+    }),
+
+  // Chase, re-refer, or record a MASH decision on an existing referral
+  // (spec 5.10). recordDecision is the apply step used by the MASH-response
+  // reader (spec 5.11). Each advances the stage and appends an event, audited.
+  advanceReferral: tenancyProcedure
+    .input(
+      z.object({
+        signalId: z.string().min(1),
+        schoolId: z.string().min(1).optional(),
+        action: z.enum(["chase", "re-refer", "decide"]),
+        decision: z.string().trim().max(500).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+      const referral = await db.referral.findUnique({
+        where: { signalId: input.signalId },
+      });
+      if (!referral) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const map = {
+        chase: {
+          stage: "chased",
+          text: "Progress chased with MASH",
+          decision: referral.decision,
+        },
+        "re-refer": {
+          stage: "re-referred",
+          text: "Re-referred to MASH with further information",
+          decision: null as string | null,
+        },
+        decide: {
+          stage: "decided",
+          text: `MASH decision recorded${input.decision ? `: ${input.decision}` : ""}`,
+          decision: input.decision ?? "Decision recorded",
+        },
+      }[input.action];
+
+      const userId = ctx.session.user.id;
+      await systemTransaction(async (tx) => {
+        await tx.referral.update({
+          where: { id: referral.id },
+          data: { stage: map.stage, decision: map.decision },
+        });
+        await tx.referralEvent.create({
+          data: {
+            tenantId: school.id,
+            referralId: referral.id,
+            occurredOn: ukDate(new Date()),
+            text: map.text,
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            tenantId: school.id,
+            userId,
+            action: `referral.${input.action === "decide" ? "decided" : input.action === "chase" ? "chased" : "re_referred"}`,
+            entityType: "signal",
+            entityId: referral.signalId,
+            pupilId: referral.pupilId,
+            metadata: input.decision ? { decision: input.decision } : undefined,
+          },
+        });
+      });
+      return { stage: map.stage };
     }),
 });

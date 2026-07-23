@@ -103,6 +103,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const ids = [schoolAId, otherSchoolId];
+  await systemDb.referralEvent.deleteMany({ where: { tenantId: { in: ids } } });
+  await systemDb.referral.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.caseReview.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.caseTask.deleteMany({ where: { tenantId: { in: ids } } });
   await systemDb.document.deleteMany({ where: { tenantId: { in: ids } } });
@@ -326,5 +328,54 @@ describe("case file and pastoral review", () => {
     ]);
     expect(tasks).toHaveLength(0);
     expect(reviews).toHaveLength(0);
+  });
+});
+
+describe("referral lifecycle", () => {
+  it("is offered on a level-3 case but not a level-2 case", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+    const l3 = await caller.casework.case({ signalId: level3SignalId });
+    const l2 = await caller.casework.case({ signalId: level2SignalId });
+    expect(l3.referral.canRefer).toBe(true);
+    expect(l2.referral.canRefer).toBe(false);
+  });
+
+  it("submits, chases and records a decision, each audited", async () => {
+    const caller = createCaller(await ctxFor(dsl));
+
+    await caller.casework.submitReferral({ signalId: level3SignalId });
+    let c = await caller.casework.case({ signalId: level3SignalId });
+    expect(c.referral.submitted).toBe(true);
+    expect(c.referral.stage).toBe("submitted");
+    expect(c.referral.events).toHaveLength(1);
+
+    // Idempotent.
+    await caller.casework.submitReferral({ signalId: level3SignalId });
+
+    await caller.casework.advanceReferral({
+      signalId: level3SignalId,
+      action: "chase",
+    });
+    await caller.casework.advanceReferral({
+      signalId: level3SignalId,
+      action: "decide",
+      decision: "Progressing to a strategy discussion",
+    });
+    c = await caller.casework.case({ signalId: level3SignalId });
+    expect(c.referral.stage).toBe("decided");
+    expect(c.referral.decision).toContain("strategy discussion");
+    expect(c.referral.events.length).toBe(3);
+
+    const events = await dbForTenant(schoolAId).auditEvent.findMany({
+      where: { action: "referral.submitted", entityId: level3SignalId },
+    });
+    expect(events.length).toBe(1);
+  });
+
+  it("keeps referrals scoped to their school (RLS)", async () => {
+    const refs = await dbForTenant(otherSchoolId).referral.findMany({
+      where: { signalId: level3SignalId },
+    });
+    expect(refs).toHaveLength(0);
   });
 });

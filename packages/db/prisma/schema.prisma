@@ -286,6 +286,38 @@ model CaseReview {
   @@map("case_reviews")
 }
 
+// A referral to the multi-agency safeguarding hub (spec 5.10 / step 10). One
+// per case. The stage advances (submitted, chased, decided, re-referred), so
+// RLS grants UPDATE; there is no DELETE. Watch never submits to MASH itself —
+// the school submits; this records the lifecycle.
+model Referral {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  signalId    String   @unique @map("signal_id")
+  pupilId     String   @map("pupil_id")
+  stage       String   @default("submitted")
+  decision    String?
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, createdAt])
+  @@map("referrals")
+}
+
+// An event on a referral's timeline (spec 5.10). Append-only.
+model ReferralEvent {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  referralId String   @map("referral_id")
+  occurredOn String   @map("occurred_on")
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([referralId, createdAt])
+  @@map("referral_events")
+}
+
 // The lifecycle is human-driven by design: the engine only ever creates or
 // refreshes OPEN signals. Confirm / dismiss / escalate are DSL actions
 // (build step 7) — nothing in the system auto-actions a signal.

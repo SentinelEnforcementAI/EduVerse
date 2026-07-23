@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Link2,
   ScrollText,
+  Send,
 } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
@@ -24,6 +25,7 @@ import {
 } from "./case-actions";
 import { CommsPanel } from "./case-comms";
 import { CaseFilePanel, ReviewScheduler } from "./case-file";
+import { CaseReferral } from "./case-referral";
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("en-GB", {
@@ -293,6 +295,22 @@ export default async function CaseViewPage({
               </p>
             )}
           </Card>
+
+          {c.referral.canRefer ? (
+            <Card className="p-5">
+              <div className="flex items-center gap-2">
+                <Send className="size-4 text-muted-foreground" aria-hidden />
+                <h3 className="text-base font-semibold">Referral</h3>
+              </div>
+              <div className="mt-3">
+                <CaseReferral
+                  signalId={c.signalId}
+                  schoolId={c.schoolId}
+                  referral={c.referral}
+                />
+              </div>
+            </Card>
+          ) : null}
 
           <Card className="p-5">
             <div className="flex items-center gap-2">
