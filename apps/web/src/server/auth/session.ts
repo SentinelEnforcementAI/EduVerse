@@ -22,12 +22,14 @@ export type AuthSession = {
 // on a plain-HTTP page is silently dropped by the browser, which would break
 // sign-in. Put a TLS certificate / HTTPS APP_URL in front and this flips to
 // secure automatically (see infra/README.md, DNS + TLS).
-const IS_HTTPS = env.APP_URL.startsWith("https://");
-
+//
+// Evaluated per call, and optional-chained: during `next build` env
+// validation is skipped and APP_URL is absent, so this must not throw at
+// module load.
 export function sessionCookieOptions(expires: Date) {
   return {
     httpOnly: true,
-    secure: IS_HTTPS,
+    secure: env.APP_URL?.startsWith("https://") ?? false,
     sameSite: "lax" as const,
     path: "/",
     expires,
