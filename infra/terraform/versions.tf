@@ -19,9 +19,11 @@ terraform {
 provider "aws" {
   region = "eu-west-2"
 
+  # Tagged by stack so a per-customer silo (project = sentinel-<slug>) carries
+  # its own cost-allocation and inventory tag, not the demo stack's.
   default_tags {
     tags = {
-      Project   = "sentinel-watch"
+      Project   = var.project
       ManagedBy = "terraform"
     }
   }

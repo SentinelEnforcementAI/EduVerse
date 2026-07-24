@@ -95,7 +95,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  const tenantIds = [schoolAId, otherSchoolId];
+  // Includes any schools added during the onboarding tests (their slugs carry
+  // the run tag), not just the fixtures.
+  const runTenants = await systemDb.tenant.findMany({
+    where: { slug: { contains: run } },
+    select: { id: true },
+  });
+  const tenantIds = runTenants.map((t) => t.id);
   await systemDb.auditEvent.deleteMany({ where: { tenantId: { in: tenantIds } } });
   await systemDb.magicLinkToken.deleteMany({
     where: { user: { email: { contains: run } } },
@@ -226,5 +232,54 @@ describe("admin.setStatus", () => {
     await expect(
       caller.admin.setStatus({ userId: otherDsl.id, status: "DEACTIVATED" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("admin.addSchool", () => {
+  it("adds a school under the admin's trust and audits it", async () => {
+    const caller = createCaller(await contextFor(admin));
+    const school = await caller.admin.addSchool({ name: `Newschool ${run}` });
+
+    const tenant = await systemDb.tenant.findUnique({
+      where: { id: school.id },
+    });
+    expect(tenant?.trustId).toBe(trustId);
+
+    const audits = await dbForTenant(school.id).auditEvent.findMany({
+      where: { action: "school.provisioned", entityId: school.id },
+    });
+    expect(audits.length).toBeGreaterThan(0);
+
+    // The new school is now visible to the admin's own onboarding + user views.
+    const { schools } = await caller.admin.users();
+    expect(schools.some((s) => s.id === school.id)).toBe(true);
+  });
+
+  it("is denied to a director and a DSL", async () => {
+    for (const u of [director, dsl]) {
+      const caller = createCaller(await contextFor(u));
+      await expect(
+        caller.admin.addSchool({ name: `Nope ${run}` }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+});
+
+describe("admin.onboarding", () => {
+  it("reports the trust's setup and readiness, scoped to the trust", async () => {
+    const caller = createCaller(await contextFor(admin));
+    const state = await caller.admin.onboarding();
+
+    expect(state.steps.trust).toBe(true);
+    expect(state.steps.schools).toBe(true);
+    // A DSL exists in schoolA (invited in an earlier test), so DSL step is met.
+    expect(state.steps.dsls).toBe(true);
+    expect(state.ready).toBe(true);
+    // Wonde self-connect is slice 3 — pending here.
+    expect(state.steps.wonde).toBe(false);
+
+    // Only the admin's own trust's schools appear.
+    expect(state.schools.some((s) => s.id === schoolAId)).toBe(true);
+    expect(state.schools.some((s) => s.id === otherSchoolId)).toBe(false);
   });
 });

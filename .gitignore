@@ -21,3 +21,4 @@ coverage/
 .DS_Store
 *.log
 **/prisma/seed-manifest.json
+dump.rdb

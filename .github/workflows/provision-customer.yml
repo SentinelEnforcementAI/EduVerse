@@ -1,0 +1,310 @@
+# Per-customer silo provisioning (eu-west-2). Stands up one MAT's own isolated
+# stack — its own VPC, RDS, Redis, ECS services, secrets and ECR repos — then
+# seeds that customer's trust, schools and first administrator. This is the
+# "flick of a switch" for a new customer (commercialisation slice 2).
+#
+# Isolation is by the Terraform `project` name-prefix variable: every resource
+# is named sentinel-<customer-slug>-*, and each customer keeps its own remote
+# state (a separate state key), so one MAT's stack can never touch another's.
+# The demo/first stack (Bootstrap AWS) uses project=sentinel-watch; a customer
+# uses project=sentinel-<slug>. Same account, hard-separated stacks.
+#
+# Re-runnable: Terraform converges and customer:provision is idempotent.
+#
+# CTO-DECISION (see docs/PROVISIONING.md): whether to go further and give each
+# MAT its own AWS account (Organizations) rather than a prefixed stack in one
+# account; and automating DNS + ACM per customer subdomain. This workflow does
+# the one-account, prefixed-stack model; the data layer is identical either way.
+name: Provision customer
+
+on:
+  workflow_dispatch:
+    inputs:
+      customer_name:
+        description: "MAT name, e.g. \"Weald Learning Trust\""
+        required: true
+        type: string
+      customer_slug:
+        description: "Short slug — the stack prefix and subdomain label, e.g. \"weald\" (lowercase, a-z0-9-)"
+        required: true
+        type: string
+      admin_email:
+        description: "First administrator + SES sender (receives the verification mail and owns the first sign-in)"
+        required: true
+        type: string
+      schools:
+        description: "Comma-separated school names to create up front, e.g. \"Downlands, Patcham\" (optional — the admin can add schools during onboarding)"
+        required: false
+        type: string
+        default: ""
+      app_url:
+        description: "Public HTTPS URL for this customer, e.g. https://weald.sentinelwatch.uk (leave blank to use the raw ALB URL until DNS is set up)"
+        required: false
+        type: string
+        default: ""
+      certificate_arn:
+        description: "ACM certificate ARN (eu-west-2) for the customer subdomain (optional — HTTP only until set)"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  # One provisioning run per customer at a time; never cancel a run mid-apply.
+  group: provision-${{ inputs.customer_slug }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Stand up and seed a customer stack
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive stack identity
+        id: id
+        run: |
+          SLUG="${{ inputs.customer_slug }}"
+          if ! [[ "$SLUG" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            echo "customer_slug must be lowercase a-z0-9- (a valid DNS label): got '$SLUG'" >&2
+            exit 1
+          fi
+          echo "project=sentinel-$SLUG" >> "$GITHUB_OUTPUT"
+          echo "state_key=customers/$SLUG.tfstate" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure Terraform state bucket
+        id: state
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="sentinel-watch-tfstate-$ACCOUNT"
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            aws s3api create-bucket --bucket "$BUCKET" \
+              --create-bucket-configuration LocationConstraint=$AWS_REGION
+            aws s3api put-bucket-versioning --bucket "$BUCKET" \
+              --versioning-configuration Status=Enabled
+            aws s3api put-public-access-block --bucket "$BUCKET" \
+              --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          fi
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: Terraform init (this customer's state)
+        working-directory: infra/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ steps.state.outputs.bucket }}" \
+            -backend-config="key=${{ steps.id.outputs.state_key }}" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform apply (customer infrastructure)
+        working-directory: infra/terraform
+        env:
+          PROJECT: ${{ steps.id.outputs.project }}
+        run: |
+          terraform apply -auto-approve \
+            -var "project=$PROJECT" \
+            -var "app_url=http://bootstrap.invalid" \
+            -var "email_from=Sentinel Watch <${{ inputs.admin_email }}>" \
+            -var "certificate_arn=${{ inputs.certificate_arn }}"
+
+      - name: Create SES identity (verification email goes out now)
+        run: |
+          aws sesv2 create-email-identity \
+            --email-identity "${{ inputs.admin_email }}" 2>/dev/null \
+            || echo "identity already exists"
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push images (to this customer's repos)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          PROJECT: ${{ steps.id.outputs.project }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f apps/web/Dockerfile \
+            -t "$REGISTRY/$PROJECT/web:$TAG" -t "$REGISTRY/$PROJECT/web:latest" .
+          docker build -f Dockerfile.worker \
+            -t "$REGISTRY/$PROJECT/worker:$TAG" -t "$REGISTRY/$PROJECT/worker:latest" .
+          docker push --all-tags "$REGISTRY/$PROJECT/web"
+          docker push --all-tags "$REGISTRY/$PROJECT/worker"
+
+      # A placeholder keeps the worker bootable before the real Wonde key exists
+      # (slice 3 self-connect). Syncs fail until the real key is set — correct.
+      - name: Ensure Wonde secret has a value
+        env:
+          PROJECT: ${{ steps.id.outputs.project }}
+        run: |
+          if ! aws secretsmanager get-secret-value \
+              --secret-id "$PROJECT/wonde-api-key" >/dev/null 2>&1; then
+            aws secretsmanager put-secret-value \
+              --secret-id "$PROJECT/wonde-api-key" \
+              --secret-string "not-configured-yet" >/dev/null
+            echo "placeholder set — replace when the customer connects Wonde"
+          fi
+
+      - name: Assemble database secrets (owner)
+        working-directory: infra/terraform
+        env:
+          PROJECT: ${{ steps.id.outputs.project }}
+        run: |
+          MASTER_ARN=$(terraform output -raw rds_master_secret_arn)
+          ENDPOINT=$(terraform output -raw rds_endpoint)
+          CREDS=$(aws secretsmanager get-secret-value --secret-id "$MASTER_ARN" \
+            --query SecretString --output text)
+          PASS=$(echo "$CREDS" | jq -r '.password|@uri')
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/database-url-owner" \
+            --secret-string "postgresql://sentinel_owner:$PASS@$ENDPOINT:5432/sentinel_watch" \
+            >/dev/null
+          echo "owner connection string stored"
+
+      - name: Task runner setup
+        id: net
+        working-directory: infra/terraform
+        run: |
+          SUBNETS=$(terraform output -json private_subnet_ids | jq -r 'join(",")')
+          SG=$(terraform output -raw worker_security_group_id)
+          echo "subnets=$SUBNETS" >> "$GITHUB_OUTPUT"
+          echo "sg=$SG" >> "$GITHUB_OUTPUT"
+
+      # Reusable one-off task runner: run_task "<name>" '<container overrides json>'
+      - name: Define task helper
+        env:
+          PROJECT: ${{ steps.id.outputs.project }}
+        run: |
+          cat > /tmp/run_task.sh <<'SCRIPT'
+          set -euo pipefail
+          NAME="$1"; OVERRIDES="$2"
+          ARN=$(aws ecs run-task --cluster "$PROJECT" \
+            --task-definition "$PROJECT-migrate" --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            ${OVERRIDES:+--overrides "$OVERRIDES"} \
+            --query 'tasks[0].taskArn' --output text)
+          echo "$NAME task: $ARN"
+          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$ARN"
+          TASK_ID="${ARN##*/}"
+          EXIT=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          REASON=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$ARN" \
+            --query 'tasks[0].stoppedReason' --output text)
+          echo "--- $NAME container logs ---"
+          aws logs get-log-events \
+            --log-group-name "/ecs/$PROJECT/worker" \
+            --log-stream-name "migrate/migrate/$TASK_ID" \
+            --limit 100 --query 'events[].message' --output text 2>/dev/null \
+            || echo "(no log stream — container may not have started: $REASON)"
+          echo "--- end logs ---"
+          [ "$EXIT" = "0" ] || { echo "$NAME failed (exit $EXIT; $REASON)"; exit 1; }
+          SCRIPT
+          chmod +x /tmp/run_task.sh
+
+      - name: Run database migrations
+        env:
+          PROJECT: ${{ steps.id.outputs.project }}
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SG: ${{ steps.net.outputs.sg }}
+        run: /tmp/run_task.sh migrations ""
+
+      - name: Create application role + store app connection string
+        working-directory: infra/terraform
+        env:
+          PROJECT: ${{ steps.id.outputs.project }}
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SG: ${{ steps.net.outputs.sg }}
+        run: |
+          APP_PASS=$(openssl rand -hex 24)
+          /tmp/run_task.sh app-role "{\"containerOverrides\":[{\"name\":\"migrate\",\"command\":[\"pnpm\",\"--filter\",\"@sentinel/db\",\"app-role:prod\"],\"environment\":[{\"name\":\"APP_ROLE_PASSWORD\",\"value\":\"$APP_PASS\"}]}]}"
+          ENDPOINT=$(terraform output -raw rds_endpoint)
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/database-url-app" \
+            --secret-string "postgresql://sentinel_app:$APP_PASS@$ENDPOINT:5432/sentinel_watch" \
+            >/dev/null
+          echo "app connection string stored"
+
+      - name: Provision the customer's trust, schools and first admin
+        env:
+          SUBNETS: ${{ steps.net.outputs.subnets }}
+          SG: ${{ steps.net.outputs.sg }}
+        run: |
+          # The data-layer factory: creates the trust, any named schools, and the
+          # first trust administrator. Idempotent. The admin then finishes
+          # onboarding in-product (add more schools, invite DSLs, connect Wonde).
+          ARGS='["pnpm","--filter","@sentinel/db","customer:provision:prod","--trust","${{ inputs.customer_name }}","--trust-slug","${{ inputs.customer_slug }}","--admin","${{ inputs.admin_email }}","--admin-name","Administrator"'
+          if [ -n "${{ inputs.schools }}" ]; then
+            ARGS="$ARGS,\"--schools\",\"${{ inputs.schools }}\""
+          fi
+          ARGS="$ARGS]"
+          /tmp/run_task.sh provision-customer "{\"containerOverrides\":[{\"name\":\"migrate\",\"command\":$ARGS}]}"
+
+      - name: Re-apply with real APP_URL and release services
+        working-directory: infra/terraform
+        env:
+          PROJECT: ${{ steps.id.outputs.project }}
+        run: |
+          # The customer's own subdomain if given, else the raw ALB URL until DNS
+          # is pointed. The app flips the session cookie to secure automatically
+          # once APP_URL is https.
+          APP_URL="${{ inputs.app_url }}"
+          if [ -z "$APP_URL" ]; then
+            APP_URL="http://$(terraform output -raw alb_dns_name)"
+          fi
+          terraform apply -auto-approve \
+            -var "project=$PROJECT" \
+            -var "app_url=$APP_URL" \
+            -var "email_from=Sentinel Watch <${{ inputs.admin_email }}>" \
+            -var "certificate_arn=${{ inputs.certificate_arn }}"
+          aws ecs update-service --cluster "$PROJECT" --service web \
+            --force-new-deployment >/dev/null
+          aws ecs update-service --cluster "$PROJECT" --service worker \
+            --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "$PROJECT" --services web worker \
+            || aws ecs wait services-stable --cluster "$PROJECT" --services web worker \
+            || {
+              echo "--- service state ---"
+              aws ecs describe-services --cluster "$PROJECT" --services web worker \
+                --query 'services[].{name:serviceName,desired:desiredCount,running:runningCount,events:events[0:5].message}' \
+                --output json
+              exit 1
+            }
+
+      - name: Summary
+        working-directory: infra/terraform
+        run: |
+          ALB=$(terraform output -raw alb_dns_name)
+          APP_URL="${{ inputs.app_url }}"
+          {
+            echo "## ${{ inputs.customer_name }} is provisioned"
+            echo ""
+            echo "- **Stack:** \`${{ steps.id.outputs.project }}\` (isolated — own VPC, RDS, Redis, secrets)"
+            echo "- **State:** \`${{ steps.id.outputs.state_key }}\`"
+            echo "- **ALB:** $ALB"
+            if [ -n "$APP_URL" ]; then
+              echo "- **App URL:** $APP_URL — point this subdomain's DNS at the ALB above (CNAME)."
+            else
+              echo "- **App URL:** http://$ALB (set up a subdomain + ACM cert and re-run with app_url to serve HTTPS)."
+            fi
+            echo "- **Sign in as:** ${{ inputs.admin_email }} — trust administrator. Verify the SES email first, then request a sign-in link and finish onboarding in-product."
+            echo "- Deactivate the sentinel-bootstrap access key in IAM once every customer is provisioned."
+          } >> "$GITHUB_STEP_SUMMARY"
