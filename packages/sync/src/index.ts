@@ -1,5 +1,6 @@
 export { HttpWondeTransport, WondeClient, WondeApiError } from "./wonde/client";
 export type { WondeTransport } from "./wonde/client";
+export type { WondeSchool } from "./wonde/types";
 export {
   runSync,
   syncStudents,

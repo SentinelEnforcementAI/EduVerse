@@ -2,6 +2,7 @@ import type {
   WondeBehaviour,
   WondePage,
   WondeResult,
+  WondeSchool,
   WondeSessionAttendance,
   WondeStudent,
 } from "./types";
@@ -81,6 +82,17 @@ export class WondeClient {
       if (!hasMore) return;
     }
     throw new WondeApiError(`Pagination did not terminate on ${path}`);
+  }
+
+  // The schools the access token can reach. Used by self-connect onboarding to
+  // let an admin map each tenant to its Wonde school. Collected across pages
+  // (a token that serves a whole MAT can approve many schools).
+  async schools(): Promise<WondeSchool[]> {
+    const all: WondeSchool[] = [];
+    for await (const page of this.paginate<WondeSchool>("/v1.0/schools")) {
+      all.push(...page);
+    }
+    return all;
   }
 
   students(schoolId: string): AsyncGenerator<WondeStudent[]> {
