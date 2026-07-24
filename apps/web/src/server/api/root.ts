@@ -7,6 +7,7 @@ import { documentsRouter } from "@/server/api/routers/documents";
 import { healthRouter } from "@/server/api/routers/health";
 import { inspectionRouter } from "@/server/api/routers/inspection";
 import { kcsieRouter } from "@/server/api/routers/kcsie";
+import { messagesRouter } from "@/server/api/routers/messages";
 import { overviewRouter } from "@/server/api/routers/overview";
 import { readerRouter } from "@/server/api/routers/reader";
 import { searchRouter } from "@/server/api/routers/search";
@@ -33,6 +34,7 @@ export const appRouter = createTRPCRouter({
   search: searchRouter,
   admin: adminRouter,
   wonde: wondeRouter,
+  messages: messagesRouter,
 });
 
 export type AppRouter = typeof appRouter;

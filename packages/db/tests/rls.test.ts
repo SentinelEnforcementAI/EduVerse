@@ -50,6 +50,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await systemDb.caseMessage.deleteMany({
+    where: { tenantId: { in: [tenantAId, tenantBId] } },
+  });
   await systemDb.session.deleteMany({ where: { tokenHash: `rls-test-${run}` } });
   await systemDb.user.deleteMany({
     where: { email: { in: [emailA, emailB, emailPlatform] } },
@@ -182,5 +185,70 @@ describe("tenant-scoped writes", () => {
     });
     expect(created.tenantId).toBe(tenantAId);
     await dbForTenant(tenantAId).user.delete({ where: { id: created.id } });
+  });
+});
+
+// Case communications (slice 4: email mission control) are an append-only,
+// tenant-isolated safeguarding record — the same guarantees as case notes and
+// decisions, proven at the database.
+describe("case_messages RLS (append-only, tenant-isolated)", () => {
+  async function seedMessage(tenantId: string, subject: string) {
+    return dbForTenant(tenantId).caseMessage.create({
+      data: {
+        tenantId,
+        signalId: `sig-${run}`,
+        pupilId: `pup-${run}`,
+        direction: "OUTBOUND",
+        fromAddress: "safeguarding@school.test",
+        toAddresses: ["mash@la.test"],
+        subject,
+        body: "Referral body.",
+        sentById: null,
+      },
+    });
+  }
+
+  it("a tenant sees only its own case messages", async () => {
+    await seedMessage(tenantAId, `A-${run}`);
+    await seedMessage(tenantBId, `B-${run}`);
+
+    const aSeen = await dbForTenant(tenantAId).caseMessage.findMany();
+    expect(aSeen.map((m) => m.subject)).toEqual([`A-${run}`]);
+    const bSeen = await dbForTenant(tenantBId).caseMessage.findMany();
+    expect(bSeen.map((m) => m.subject)).toEqual([`B-${run}`]);
+  });
+
+  it("cannot be inserted into another tenant", async () => {
+    await expect(
+      dbForTenant(tenantAId).caseMessage.create({
+        data: {
+          tenantId: tenantBId,
+          signalId: `sig-${run}`,
+          pupilId: `pup-${run}`,
+          direction: "OUTBOUND",
+          fromAddress: "x@school.test",
+          toAddresses: ["y@la.test"],
+          subject: "intruder",
+          body: "x",
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("is append-only: no UPDATE or DELETE policy, so neither matches a row", async () => {
+    // FORCE RLS with no UPDATE/DELETE policy denies the row set entirely →
+    // zero rows affected, and the record stands unchanged.
+    const updated = await dbForTenant(tenantAId).caseMessage.updateMany({
+      where: { subject: `A-${run}` },
+      data: { subject: "rewritten" },
+    });
+    expect(updated.count).toBe(0);
+    const deleted = await dbForTenant(tenantAId).caseMessage.deleteMany({
+      where: { subject: `A-${run}` },
+    });
+    expect(deleted.count).toBe(0);
+
+    const still = await dbForTenant(tenantAId).caseMessage.findMany();
+    expect(still.map((m) => m.subject)).toEqual([`A-${run}`]);
   });
 });

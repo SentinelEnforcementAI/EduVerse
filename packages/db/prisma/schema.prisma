@@ -218,6 +218,50 @@ model CaseNote {
   @@map("case_notes")
 }
 
+enum CaseMessageDirection {
+  OUTBOUND
+  INBOUND // reserved for phase 2 (inbound safeguarding-mailbox capture)
+}
+
+enum CaseMessageStatus {
+  SENT
+  FAILED
+}
+
+// A communication threaded to a case (commercialisation slice 4: email mission
+// control). Phase 1 records outbound mail a human reviewed and sent from the
+// platform — the drafted referral or letter, threaded to the child's case, so
+// the communication itself lives in the system ("nothing slips through the
+// gaps"). Append-only: a safeguarding communication, once sent, is part of the
+// record — never rewritten or removed (spec principle 3/4). Sealed on any list
+// surface (the pupil is referenced by signal, shown sealed until a case
+// reveal). Human-in-the-loop is structural: the machine drafts, the person
+// sends — there is no auto-send.
+model CaseMessage {
+  id                String               @id @default(cuid())
+  tenantId          String               @map("tenant_id")
+  signalId          String               @map("signal_id")
+  pupilId           String               @map("pupil_id")
+  direction         CaseMessageDirection
+  status            CaseMessageStatus    @default(SENT)
+  // The template the draft came from (a CommType), if any.
+  commType          String?              @map("comm_type")
+  fromAddress       String               @map("from_address")
+  toAddresses       String[]             @map("to_addresses")
+  subject           String
+  body              String
+  // The user who sent it (null for inbound capture in phase 2).
+  sentById          String?              @map("sent_by_id")
+  // Provider thread + message ids, for phase-2 threading of replies.
+  threadId          String?              @map("thread_id")
+  providerMessageId String?              @map("provider_message_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  @@index([signalId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("case_messages")
+}
+
 enum DocumentScope {
   ORG
   CASE
