@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { serverApi } from "@/trpc/server";
 
 import { AddSchoolForm } from "./onboarding-client";
+import { WondeConnect } from "./wonde-connect";
 
 // Guided onboarding for a trust administrator (commercialisation slice 2). Once
 // a customer's silo stack is provisioned — trust + first admin created — the
@@ -17,8 +18,12 @@ export default async function OnboardingPage() {
   const api = await serverApi();
 
   let state;
+  let wonde;
   try {
-    state = await api.admin.onboarding();
+    [state, wonde] = await Promise.all([
+      api.admin.onboarding(),
+      api.wonde.overview(),
+    ]);
   } catch (error) {
     if (error instanceof TRPCError && error.code === "FORBIDDEN") {
       redirect("/dashboard");
@@ -130,18 +135,16 @@ export default async function OnboardingPage() {
           </Link>
         </Step>
 
-        {/* Step 4 — Wonde (slice 3: pending, not yet actionable) */}
+        {/* Step 4 — Connect Wonde (live: map each school to its Wonde school) */}
         <Step
-          done={false}
-          pending
+          done={state.steps.wonde}
+          pending={!wonde.configured}
           icon={Cable}
           n={4}
           title="Connect Wonde"
-          description="Bring in attendance, behaviour and attainment from your MIS, so the risk engine has data to work with."
+          description="Map each school to its Wonde school to bring in attendance, behaviour and attainment. The platform only reads from your MIS — it never writes back."
         >
-          <span className="inline-flex items-center gap-2 rounded-md border border-dashed border-cloud px-3 py-1.5 text-sm text-muted-foreground">
-            Coming soon — self-connect is next in the rollout.
-          </span>
+          <WondeConnect configured={wonde.configured} schools={wonde.schools} />
         </Step>
       </ol>
     </div>

@@ -13,6 +13,7 @@ import { searchRouter } from "@/server/api/routers/search";
 import { signalsRouter } from "@/server/api/routers/signals";
 import { syncRouter } from "@/server/api/routers/sync";
 import { tenantRouter } from "@/server/api/routers/tenant";
+import { wondeRouter } from "@/server/api/routers/wonde";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 export const appRouter = createTRPCRouter({
@@ -31,6 +32,7 @@ export const appRouter = createTRPCRouter({
   cohort: cohortRouter,
   search: searchRouter,
   admin: adminRouter,
+  wonde: wondeRouter,
 });
 
 export type AppRouter = typeof appRouter;

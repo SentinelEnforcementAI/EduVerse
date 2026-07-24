@@ -55,8 +55,14 @@ model Tenant {
   // The Multi-Academy Trust this school belongs to, if any. NULL for a
   // standalone single school (the demo's "Single school" tenancy mode).
   trustId   String?  @map("trust_id")
-  // Wonde school identifier once the tenant is linked to a (sandbox) school.
+  // Wonde school identifier once the tenant is linked to a (sandbox or
+  // production) school. Set by self-connect during onboarding (slice 3) or the
+  // sync trigger CLI.
   wondeSchoolId String? @unique @map("wonde_school_id")
+  // The linked Wonde school's display name and when it was connected — for the
+  // onboarding surface; the id above is the key the sync jobs use.
+  wondeSchoolName String?   @map("wonde_school_name")
+  wondeConnectedAt DateTime? @map("wonde_connected_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

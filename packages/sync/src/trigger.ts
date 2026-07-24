@@ -38,7 +38,7 @@ async function main() {
     }
     await systemDb.tenant.update({
       where: { id: tenant.id },
-      data: { wondeSchoolId: schoolId },
+      data: { wondeSchoolId: schoolId, wondeConnectedAt: new Date() },
     });
     console.info(`Linked ${tenant.slug} to Wonde school ${schoolId}`);
   }

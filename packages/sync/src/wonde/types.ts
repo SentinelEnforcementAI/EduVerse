@@ -17,6 +17,16 @@ export type WondePage<T> = {
   };
 };
 
+// A school the access token can reach (GET /v1.0/schools). Used by the
+// self-connect onboarding step to let an admin map each tenant to its Wonde
+// school. The token is one per environment/customer; the schools are the ones
+// that have approved the application.
+export type WondeSchool = {
+  id: string;
+  name?: string | null;
+  urn?: string | null;
+};
+
 export type WondeStudent = {
   id: string;
   upi?: string | null;

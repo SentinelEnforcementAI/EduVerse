@@ -146,7 +146,8 @@ children and real money" layer.
    the DSLs). *(Done — see §1 above and `docs/PROVISIONING.md`.)*
 3. **Wonde production self-connect.** A "Connect Wonde" onboarding step,
    production credentials, per-tenant key storage in Secrets Manager, school
-   selection. Replaces the operator-set environment key.
+   selection. Replaces the operator-set environment key. *(Done — school
+   selection self-connect is built; see the slice 3 note below.)*
 4. **Email mission control.** Outbound send then inbound capture, as above.
 5. **Billing and metering.** Per-pupil usage metering plus the flat £50k MAT
    line; invoicing (Stripe or equivalent). None exists today.
@@ -171,11 +172,28 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 |---|-------|-------|
 | 1 | Access and tenancy foundation | Done (in-product user management: an ADMIN role, invite/re-role/deactivate, soft deactivation that blocks sign-in, all audited). SSO/MFA remain as a follow-up. |
 | 2 | Customer provisioning and onboarding | Done (silo factory: a Provision customer workflow parameterised per MAT, an idempotent audited `provisionCustomer` data layer, and a guided in-product onboarding flow — add schools, invite DSLs. The account-per-MAT vs prefixed-stack choice and DNS/TLS automation remain CTO-DECISIONs — see `docs/PROVISIONING.md`). |
-| 3 | Wonde production self-connect | Not started |
+| 3 | Wonde production self-connect | Done (in-product self-connect: a "Connect Wonde" onboarding step maps each school to its Wonde school from the schools the environment's token can reach, audited on link/unlink, reading only — never writing back to the MIS). The token itself is still set at the stack level (Secrets Manager); OAuth-style token capture in-app remains a CTO-DECISION — see the slice 3 note below. |
 | 4 | Email mission control | Not started |
 | 5 | Billing and metering | Not started |
 | 6 | Proactive notifications | Not started |
 | 7 | Rules engine tuning | Not started |
 | 8 | Production hardening | Not started |
+
+### Slice 3 note — Wonde self-connect: what's built, and the remaining edge
+
+Wonde's model is one access token per application; schools approve the app, and
+`GET /v1.0/schools` lists the ones the token can reach. Self-connect is built on
+that: in onboarding, an admin maps each school (tenant) to its Wonde school from
+the reachable list — validated against the live token, unique per school, and
+audited on every link and unlink. The sync jobs then run against the linked
+`wonde_school_id`; the platform only ever reads.
+
+What remains a **CTO-DECISION** is how the *token itself* is supplied. Today it
+lives in the stack's `<project>/wonde-api-key` secret (set by the operator, or
+by Wonde app-approval, before onboarding), injected into the web and worker as
+`WONDE_API_KEY`. A fuller self-serve flow would capture the token in-app —
+either an OAuth-style Wonde authorisation or a paste-and-store that writes to
+Secrets Manager — so no operator step is needed at all. The school-mapping half
+(the part a DSL actually touches) is done; the token-capture half is the edge.
 
 This document is living: update the table and the slice sections as each lands.
