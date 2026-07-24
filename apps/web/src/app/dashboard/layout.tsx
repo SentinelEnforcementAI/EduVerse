@@ -11,6 +11,7 @@ import {
   ScrollText,
   SearchCheck,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 
 import { resolveTenancy } from "@sentinel/db";
@@ -39,9 +40,12 @@ export default async function DashboardLayout({
 
   const tenancy = await resolveTenancy(session.user);
   const isDirector = tenancy.mode === "mat";
-  const roleLabel = isDirector
-    ? "Director of Safeguarding"
-    : `DSL${tenancy.schools[0] ? `, ${tenancy.schools[0].name}` : ""}`;
+  const isAdmin = session.user.role === "ADMIN";
+  const roleLabel = isAdmin
+    ? "Trust administrator"
+    : isDirector
+      ? "Director of Safeguarding"
+      : `DSL${tenancy.schools[0] ? `, ${tenancy.schools[0].name}` : ""}`;
 
   const api = await serverApi();
   const counts = await api.overview.counts();
@@ -126,6 +130,11 @@ export default async function DashboardLayout({
         },
         { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
       ];
+
+  // Trust administrators get the user-management surface in their nav.
+  if (isAdmin) {
+    nav.push({ href: "/dashboard/admin/users", label: "Users", icon: Users });
+  }
 
   const quickActions: QuickAction[] = isDirector
     ? [

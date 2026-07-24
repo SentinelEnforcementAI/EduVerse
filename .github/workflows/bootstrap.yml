@@ -200,16 +200,16 @@ jobs:
           # caseload, and the rules engine run over every school. Synthetic only.
           /tmp/run_task.sh seed '{"containerOverrides":[{"name":"migrate","command":["pnpm","--filter","@sentinel/db","db:seed:demo:prod"]}]}'
 
-      - name: Provision the director sign-in
+      - name: Provision the admin sign-in
         if: ${{ inputs.seed_demo_data }}
         env:
           SUBNETS: ${{ steps.net.outputs.subnets }}
           SG: ${{ steps.net.outputs.sg }}
         run: |
-          # The founder signs in as Director of Safeguarding for the trust, so
-          # the whole product (trust overview, every school, cases) is reachable
-          # from one account.
-          /tmp/run_task.sh provision-director "{\"containerOverrides\":[{\"name\":\"migrate\",\"command\":[\"pnpm\",\"--filter\",\"@sentinel/db\",\"user:add:prod\",\"--email\",\"${{ inputs.email_address }}\",\"--role\",\"director\",\"--trust\",\"weald-learning-trust\",\"--name\",\"Founder\"]}]}"
+          # The founder signs in as a trust administrator: everything a director
+          # sees (trust overview, every school, cases) plus the user-management
+          # surface, so the whole product is reachable from one account.
+          /tmp/run_task.sh provision-admin "{\"containerOverrides\":[{\"name\":\"migrate\",\"command\":[\"pnpm\",\"--filter\",\"@sentinel/db\",\"user:add:prod\",\"--email\",\"${{ inputs.email_address }}\",\"--role\",\"admin\",\"--trust\",\"weald-learning-trust\",\"--name\",\"Founder\"]}]}"
 
       - name: Re-apply with real APP_URL and release services
         working-directory: infra/terraform
@@ -243,8 +243,8 @@ jobs:
             echo "## Sentinel Watch is live"
             echo ""
             echo "- **App:** http://$ALB"
-            echo "- **Sign in as:** ${{ inputs.email_address }} — Director of Safeguarding for Weald Learning Trust (check the SES verification email first, then request a sign-in link)."
-            echo "- As director you can see the full demo: the trust overview, all 5 schools, every case, KCSIE, inspection, insights and audit."
+            echo "- **Sign in as:** ${{ inputs.email_address }} — trust administrator for Weald Learning Trust (check the SES verification email first, then request a sign-in link)."
+            echo "- You can see the full demo: the trust overview, all 5 schools, every case, KCSIE, inspection, insights, audit, and the Users admin surface."
             echo "- To demo a single-school DSL view, provision a DSL for another verified address with the Deploy image:"
             echo "  \`user:add:prod --email dsl@you.example --tenant downlands --name \"A. DSL\"\`."
             echo "- Deactivate the sentinel-bootstrap access key in IAM once sign-in works."

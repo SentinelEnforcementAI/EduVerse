@@ -564,6 +564,16 @@ model AttainmentRecord {
 enum UserRole {
   DSL
   DIRECTOR
+  // A trust administrator: everything a director sees, plus in-product user
+  // management (invite, change role, deactivate) for the trust's accounts.
+  ADMIN
+}
+
+// Account status. Deactivation is soft and audited — accounts are never hard
+// deleted, so the audit trail of who did what stays intact (principle 4).
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
 }
 
 // A user of the platform (a school DSL, or a trust Director of Safeguarding).
@@ -573,9 +583,12 @@ enum UserRole {
 // to resolve to a User row by email.
 model User {
   id        String   @id @default(cuid())
-  email     String   @unique
+  email     String     @unique
   name      String?
-  role      UserRole @default(DSL)
+  role      UserRole   @default(DSL)
+  status    UserStatus @default(ACTIVE)
+  // Set when the account is deactivated; the row is never deleted.
+  deactivatedAt DateTime? @map("deactivated_at")
   // Exactly one of tenantId / trustId is set for an operational user:
   //   DSL      → tenant_id  (their school), trust_id NULL
   //   DIRECTOR → trust_id   (their trust),  tenant_id NULL
