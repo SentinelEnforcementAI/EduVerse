@@ -44,7 +44,12 @@ never physically touch another's" is a far stronger DPO story than "we have
 good RLS." Keep pool available for a future self-serve / SMB tier.
 
 The existing **Bootstrap AWS** workflow already provisions a complete isolated
-stack; it is roughly 80% of a per-customer environment factory.
+stack; it is roughly 80% of a per-customer environment factory. **Slice 2 built
+the remaining 20%** — see `docs/PROVISIONING.md`: a **Provision customer**
+workflow that parameterises the stack per MAT (`project = sentinel-<slug>`, a
+separate remote-state key per customer) and finishes by seeding the customer's
+trust, schools and first administrator, followed by a guided in-product
+onboarding flow. The data-layer factory is idempotent and unit-tested.
 
 ### What silo needs to be a flick of a switch
 
@@ -138,7 +143,7 @@ children and real money" layer.
    *(This slice is being built first — see status below.)*
 2. **Customer provisioning and onboarding.** The silo environment factory
    above, plus a guided onboarding flow (create the trust and schools, invite
-   the DSLs).
+   the DSLs). *(Done — see §1 above and `docs/PROVISIONING.md`.)*
 3. **Wonde production self-connect.** A "Connect Wonde" onboarding step,
    production credentials, per-tenant key storage in Secrets Manager, school
    selection. Replaces the operator-set environment key.
@@ -165,7 +170,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 | # | Slice | State |
 |---|-------|-------|
 | 1 | Access and tenancy foundation | Done (in-product user management: an ADMIN role, invite/re-role/deactivate, soft deactivation that blocks sign-in, all audited). SSO/MFA remain as a follow-up. |
-| 2 | Customer provisioning and onboarding | Not started |
+| 2 | Customer provisioning and onboarding | Done (silo factory: a Provision customer workflow parameterised per MAT, an idempotent audited `provisionCustomer` data layer, and a guided in-product onboarding flow — add schools, invite DSLs. The account-per-MAT vs prefixed-stack choice and DNS/TLS automation remain CTO-DECISIONs — see `docs/PROVISIONING.md`). |
 | 3 | Wonde production self-connect | Not started |
 | 4 | Email mission control | Not started |
 | 5 | Billing and metering | Not started |

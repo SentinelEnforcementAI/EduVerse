@@ -13,6 +13,8 @@
     "test": "dotenv -e ../../.env -- vitest run",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "user:add": "dotenv -e ../../.env -- tsx scripts/user-add.ts",
+    "customer:provision": "dotenv -e ../../.env -- tsx scripts/provision-customer.ts",
+    "customer:provision:prod": "tsx scripts/provision-customer.ts",
     "db:deploy:prod": "prisma migrate deploy",
     "user:add:prod": "tsx scripts/user-add.ts",
     "db:seed:prod": "tsx prisma/seed.ts",

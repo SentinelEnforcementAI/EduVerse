@@ -146,3 +146,8 @@ export async function resolveTenancy(user: TenancyUser): Promise<Tenancy> {
   const mode: TenancyMode = trustWide ? "mat" : "school";
   return { mode, trustId: user.trustId, schools };
 }
+
+// Customer provisioning + onboarding primitives (commercialisation slice 2):
+// provisionCustomer (the silo factory's data layer) and createSchool (shared by
+// provisioning and in-app onboarding).
+export * from "./provisioning";

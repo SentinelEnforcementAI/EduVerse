@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { systemDb } from "@sentinel/db";
+import { createSchool, systemDb } from "@sentinel/db";
 
 import { adminProcedure, createTRPCRouter } from "@/server/api/trpc";
 
@@ -258,4 +258,88 @@ export const adminRouter = createTRPCRouter({
       }
       return { ok: true };
     }),
+
+  // Add a school to the trust during onboarding. A new school is just a new
+  // tenant under the trust; the row-level-security policies already cover every
+  // table, so no per-tenant setup is needed. Audited against the new school.
+  addSchool: adminProcedure
+    .input(z.object({ name: z.string().trim().min(1).max(120) }))
+    .mutation(async ({ ctx, input }) => {
+      const school = await createSchool({
+        trustId: ctx.adminTrustId,
+        name: input.name,
+        actingUserId: ctx.session.user.id,
+      });
+      return school;
+    }),
+
+  // The guided-onboarding checklist for the trust: what is set up and what is
+  // still needed to be ready to work. Drives /dashboard/admin/onboarding.
+  onboarding: adminProcedure.query(async ({ ctx }) => {
+    const trust = await systemDb.trust.findUnique({
+      where: { id: ctx.adminTrustId },
+      select: { name: true, slug: true },
+    });
+    const schools = await systemDb.tenant.findMany({
+      where: { trustId: ctx.adminTrustId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, wondeSchoolId: true },
+    });
+    const schoolIds = schools.map((s) => s.id);
+
+    const accounts = await systemDb.user.findMany({
+      where: {
+        status: "ACTIVE",
+        OR: [
+          { trustId: ctx.adminTrustId },
+          { tenantId: { in: schoolIds } },
+        ],
+      },
+      select: { role: true, tenantId: true },
+    });
+
+    const dslCount = new Map<string, number>();
+    let admins = 0;
+    let directors = 0;
+    for (const a of accounts) {
+      if (a.role === "DSL" && a.tenantId) {
+        dslCount.set(a.tenantId, (dslCount.get(a.tenantId) ?? 0) + 1);
+      } else if (a.role === "ADMIN") {
+        admins++;
+      } else if (a.role === "DIRECTOR") {
+        directors++;
+      }
+    }
+
+    const schoolCards = schools.map((s) => ({
+      id: s.id,
+      name: s.name,
+      dslCount: dslCount.get(s.id) ?? 0,
+      wondeLinked: s.wondeSchoolId !== null,
+    }));
+    const totalDsls = schoolCards.reduce((n, s) => n + s.dslCount, 0);
+
+    // Each onboarding step: done when its condition holds. Wonde self-connect is
+    // commercialisation slice 3 — surfaced here as pending, not yet actionable.
+    const steps = {
+      trust: true,
+      schools: schools.length > 0,
+      dsls: totalDsls > 0,
+      wonde: schoolCards.some((s) => s.wondeLinked),
+    };
+
+    return {
+      trust: trust ?? { name: "Your trust", slug: "" },
+      schools: schoolCards,
+      totals: {
+        schools: schools.length,
+        dsls: totalDsls,
+        admins,
+        directors,
+      },
+      steps,
+      // Ready to work when there is at least one school with at least one DSL.
+      ready: steps.schools && steps.dsls,
+    };
+  }),
 });

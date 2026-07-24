@@ -8,6 +8,7 @@ import {
   FolderOpen,
   LayoutDashboard,
   LineChart,
+  Rocket,
   ScrollText,
   SearchCheck,
   ShieldCheck,
@@ -131,8 +132,13 @@ export default async function DashboardLayout({
         { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
       ];
 
-  // Trust administrators get the user-management surface in their nav.
+  // Trust administrators get the onboarding and user-management surfaces.
   if (isAdmin) {
+    nav.push({
+      href: "/dashboard/admin/onboarding",
+      label: "Onboarding",
+      icon: Rocket,
+    });
     nav.push({ href: "/dashboard/admin/users", label: "Users", icon: Users });
   }
 
