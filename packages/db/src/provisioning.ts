@@ -124,6 +124,15 @@ export async function provisionCustomer(
         data: { name: trustName, slug: trustSlug },
       });
 
+  // A billing account with default (provisional) pricing, so metering has a
+  // basis from day one. Idempotent — a re-run leaves an existing account's
+  // negotiated pricing untouched.
+  await systemDb.billingAccount.upsert({
+    where: { trustId: trust.id },
+    update: {},
+    create: { trustId: trust.id },
+  });
+
   // Schools, upserted by slug under this trust. A slug already owned by this
   // trust is updated; a brand-new one is created and audited against itself.
   const schools: ProvisionedRef[] = [];

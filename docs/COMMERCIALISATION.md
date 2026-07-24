@@ -152,7 +152,9 @@ children and real money" layer.
    *(Phase 1 outbound is done — see the slice 4 note below; Phase 2 inbound is
    DPIA-gated and not started.)*
 5. **Billing and metering.** Per-pupil usage metering plus the flat £50k MAT
-   line; invoicing (Stripe or equivalent). None exists today.
+   line; invoicing (Stripe or equivalent). *(Done — metering, snapshots and the
+   invoice lifecycle are built; the real payment provider is stubbed, a
+   CTO-DECISION. See the slice 5 note below.)*
 6. **Proactive notifications.** DSLs alerted (email/push) the moment a serious
    signal is raised, not reliant on checking the dashboard.
 7. **Rules engine tuning.** Move the five hardcoded rules to per-trust
@@ -176,7 +178,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 | 2 | Customer provisioning and onboarding | Done (silo factory: a Provision customer workflow parameterised per MAT, an idempotent audited `provisionCustomer` data layer, and a guided in-product onboarding flow — add schools, invite DSLs. The account-per-MAT vs prefixed-stack choice and DNS/TLS automation remain CTO-DECISIONs — see `docs/PROVISIONING.md`). |
 | 3 | Wonde production self-connect | Done (in-product self-connect: a "Connect Wonde" onboarding step maps each school to its Wonde school from the schools the environment's token can reach, audited on link/unlink, reading only — never writing back to the MIS). The token itself is still set at the stack level (Secrets Manager); OAuth-style token capture in-app remains a CTO-DECISION — see the slice 3 note below. |
 | 4 | Email mission control | Phase 1 done (outbound send: a human reviews a drafted referral/letter and sends it from the platform, threaded to the case; every message is written to an append-only, tenant-isolated communications timeline and the audit log — the machine drafts, the person sends, no auto-send). Phase 2 (inbound safeguarding-mailbox capture) is **not started and DPIA-gated** — see below. |
-| 5 | Billing and metering | Not started |
+| 5 | Billing and metering | Done (per-pupil metering + the flat £50k MAT line, frozen into period snapshots with an invoice lifecycle; an admin billing surface; a billing account provisioned per trust; every action audited; system-context-only RLS so a school never sees billing). The per-pupil rate is provisional and the real payment provider is stubbed — both CTO-DECISIONs, see the slice 5 note. |
 | 6 | Proactive notifications | Not started |
 | 7 | Rules engine tuning | Not started |
 | 8 | Production hardening | Not started |
@@ -217,5 +219,28 @@ product; per §2 it must be scoped into the DPIA at design time, not after. The
 `CaseMessage` model already carries `direction` (INBOUND reserved), `threadId`
 and `providerMessageId` so inbound threading drops onto the same record without
 a migration.
+
+### Slice 5 note — billing: metering is real, the payment rail is stubbed
+
+The money math is built and tested to the penny: a per-trust billing account
+(cost-per-pupil + the flat £50,000 MAT fee, integer pence), metering that counts
+pupils across the trust's schools live, and period **snapshots** that freeze the
+pupil count and pricing so a later change never rewrites history. Each snapshot
+carries an invoice lifecycle (draft → issued → paid); the admin billing surface
+shows the current basis and the metered periods. Billing is trust-level data
+with **system-context-only RLS** — a school tenant can never read it — and every
+snapshot and invoice action is audited. `provisionCustomer` gives every new
+trust a billing account with default pricing.
+
+Two **CTO-DECISIONs** remain, both isolated behind seams:
+
+- **The per-pupil rate is provisional** (a placeholder default on the billing
+  account, labelled as such in the UI). Set the commercial figure — per trust if
+  rates are negotiated — before invoicing a real customer.
+- **The payment provider is stubbed.** `raiseInvoice` goes through an `Invoicer`
+  interface returning a provider-shaped id; no money moves. Wire a real provider
+  (Stripe or equivalent): a Customer per trust (the `stripeCustomerId` field is
+  reserved), an Invoice with the per-pupil and MAT lines, and paid-status
+  reconciliation via webhook.
 
 This document is living: update the table and the slice sections as each lands.

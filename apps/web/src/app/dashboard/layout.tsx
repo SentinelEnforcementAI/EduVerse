@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import {
   Bell,
   Building2,
+  CreditCard,
   FileBarChart,
   FileText,
   Flag,
@@ -140,6 +141,11 @@ export default async function DashboardLayout({
       icon: Rocket,
     });
     nav.push({ href: "/dashboard/admin/users", label: "Users", icon: Users });
+    nav.push({
+      href: "/dashboard/admin/billing",
+      label: "Billing",
+      icon: CreditCard,
+    });
   }
 
   const quickActions: QuickAction[] = isDirector
