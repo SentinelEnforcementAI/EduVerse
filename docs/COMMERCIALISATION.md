@@ -149,6 +149,8 @@ children and real money" layer.
    selection. Replaces the operator-set environment key. *(Done — school
    selection self-connect is built; see the slice 3 note below.)*
 4. **Email mission control.** Outbound send then inbound capture, as above.
+   *(Phase 1 outbound is done — see the slice 4 note below; Phase 2 inbound is
+   DPIA-gated and not started.)*
 5. **Billing and metering.** Per-pupil usage metering plus the flat £50k MAT
    line; invoicing (Stripe or equivalent). None exists today.
 6. **Proactive notifications.** DSLs alerted (email/push) the moment a serious
@@ -173,7 +175,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 | 1 | Access and tenancy foundation | Done (in-product user management: an ADMIN role, invite/re-role/deactivate, soft deactivation that blocks sign-in, all audited). SSO/MFA remain as a follow-up. |
 | 2 | Customer provisioning and onboarding | Done (silo factory: a Provision customer workflow parameterised per MAT, an idempotent audited `provisionCustomer` data layer, and a guided in-product onboarding flow — add schools, invite DSLs. The account-per-MAT vs prefixed-stack choice and DNS/TLS automation remain CTO-DECISIONs — see `docs/PROVISIONING.md`). |
 | 3 | Wonde production self-connect | Done (in-product self-connect: a "Connect Wonde" onboarding step maps each school to its Wonde school from the schools the environment's token can reach, audited on link/unlink, reading only — never writing back to the MIS). The token itself is still set at the stack level (Secrets Manager); OAuth-style token capture in-app remains a CTO-DECISION — see the slice 3 note below. |
-| 4 | Email mission control | Not started |
+| 4 | Email mission control | Phase 1 done (outbound send: a human reviews a drafted referral/letter and sends it from the platform, threaded to the case; every message is written to an append-only, tenant-isolated communications timeline and the audit log — the machine drafts, the person sends, no auto-send). Phase 2 (inbound safeguarding-mailbox capture) is **not started and DPIA-gated** — see below. |
 | 5 | Billing and metering | Not started |
 | 6 | Proactive notifications | Not started |
 | 7 | Rules engine tuning | Not started |
@@ -195,5 +197,25 @@ by Wonde app-approval, before onboarding), injected into the web and worker as
 either an OAuth-style Wonde authorisation or a paste-and-store that writes to
 Secrets Manager — so no operator step is needed at all. The school-mapping half
 (the part a DSL actually touches) is done; the token-capture half is the edge.
+
+### Slice 4 note — email mission control: phase 1 shipped, phase 2 DPIA-gated
+
+**Phase 1 (outbound) is built.** From a case, a DSL drafts a referral or letter,
+reviews it, and sends it from the platform to the recipients they confirm. The
+send goes through the mail transport (SES eu-west-2 in phase 1 — a verified
+subdomain; phase 2 will send via the school's own connected mailbox), and the
+message is written to an **append-only, tenant-isolated `CaseMessage`** timeline
+threaded to the case, plus the audit log. A provider failure is recorded as a
+FAILED message rather than lost. This is the "download and paste into Outlook"
+step replaced by one audited click — the communication now lives in the system.
+Human-in-the-loop is structural: there is no auto-send anywhere.
+
+**Phase 2 (inbound capture) is not started, and is gated on Fieldfisher's
+DPIA.** Connecting a school's dedicated safeguarding mailbox and surfacing
+inbound mail against cases is the biggest special-category-data surface in the
+product; per §2 it must be scoped into the DPIA at design time, not after. The
+`CaseMessage` model already carries `direction` (INBOUND reserved), `threadId`
+and `providerMessageId` so inbound threading drops onto the same record without
+a migration.
 
 This document is living: update the table and the slice sections as each lands.
