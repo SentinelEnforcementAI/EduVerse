@@ -119,7 +119,8 @@ const TENANCY_SCHOOL_SELECT = {
 export async function resolveAccessibleSchools(
   user: TenancyUser,
 ): Promise<AccessibleSchool[]> {
-  if (user.role === "DIRECTOR" && user.trustId) {
+  // A director and a trust admin both see every school in their trust.
+  if ((user.role === "DIRECTOR" || user.role === "ADMIN") && user.trustId) {
     return systemDb.tenant.findMany({
       where: { trustId: user.trustId },
       orderBy: { name: "asc" },
@@ -139,7 +140,9 @@ export async function resolveAccessibleSchools(
 // Resolves a user's full tenancy: mode, trust, and accessible schools.
 export async function resolveTenancy(user: TenancyUser): Promise<Tenancy> {
   const schools = await resolveAccessibleSchools(user);
-  const mode: TenancyMode =
-    user.role === "DIRECTOR" && user.trustId ? "mat" : "school";
+  // A director and a trust admin both operate across the whole trust.
+  const trustWide =
+    (user.role === "DIRECTOR" || user.role === "ADMIN") && !!user.trustId;
+  const mode: TenancyMode = trustWide ? "mat" : "school";
   return { mode, trustId: user.trustId, schools };
 }

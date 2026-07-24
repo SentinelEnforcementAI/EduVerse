@@ -164,7 +164,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 
 | # | Slice | State |
 |---|-------|-------|
-| 1 | Access and tenancy foundation | In progress |
+| 1 | Access and tenancy foundation | Done (in-product user management: an ADMIN role, invite/re-role/deactivate, soft deactivation that blocks sign-in, all audited). SSO/MFA remain as a follow-up. |
 | 2 | Customer provisioning and onboarding | Not started |
 | 3 | Wonde production self-connect | Not started |
 | 4 | Email mission control | Not started |

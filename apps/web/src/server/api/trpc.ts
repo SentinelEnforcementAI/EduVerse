@@ -111,6 +111,20 @@ export const tenancyProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx: { ...ctx, tenancy: ctx.tenancy } });
 });
 
+// Requires a signed-in trust administrator. Gates the user-management surface;
+// narrows ctx to a non-null trustId for handlers. Separation of duties: a
+// director sees the safeguarding data, only an admin manages accounts.
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  const user = ctx.session.user;
+  if (user.role !== "ADMIN" || !user.trustId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Administrator access is required.",
+    });
+  }
+  return next({ ctx: { ...ctx, adminTrustId: user.trustId } });
+});
+
 // Opens a tenant-scoped client for one school the caller is allowed to see.
 // The school must be in the caller's resolved tenancy — a director can only
 // reach schools of their own trust, a DSL only their own school — so this is

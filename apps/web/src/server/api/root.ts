@@ -1,3 +1,4 @@
+import { adminRouter } from "@/server/api/routers/admin";
 import { auditRouter } from "@/server/api/routers/audit";
 import { authRouter } from "@/server/api/routers/auth";
 import { caseworkRouter } from "@/server/api/routers/casework";
@@ -29,6 +30,7 @@ export const appRouter = createTRPCRouter({
   inspection: inspectionRouter,
   cohort: cohortRouter,
   search: searchRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

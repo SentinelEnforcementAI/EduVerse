@@ -26,7 +26,10 @@ export async function requestMagicLink(
   const email = normaliseEmail(rawEmail);
 
   const user = await db.user.findUnique({ where: { email } });
-  if (!user) return;
+  // Unknown or deactivated accounts are treated identically to a valid one
+  // from the caller's side (no link is sent, same response), so the endpoint
+  // leaks nothing and a deactivated account can never sign back in.
+  if (!user || user.status === "DEACTIVATED") return;
 
   const token = generateToken();
   await db.magicLinkToken.create({
@@ -59,6 +62,15 @@ export async function consumeMagicLink(
   if (!record) return { ok: false, reason: "invalid" };
   if (!isMagicLinkUsable(record)) {
     return { ok: false, reason: "expired_or_used" };
+  }
+
+  // A link issued before the account was deactivated must not grant a session.
+  const user = await db.user.findUnique({
+    where: { id: record.userId },
+    select: { status: true },
+  });
+  if (!user || user.status === "DEACTIVATED") {
+    return { ok: false, reason: "invalid" };
   }
 
   await db.magicLinkToken.update({

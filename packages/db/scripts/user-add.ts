@@ -29,19 +29,29 @@ async function main() {
   });
 
   const email = values.email?.trim().toLowerCase();
-  const role = (values.role?.trim().toLowerCase() ?? "dsl") as "dsl" | "director";
-  if (!email || !email.includes("@") || (role !== "dsl" && role !== "director")) {
+  const role = (values.role?.trim().toLowerCase() ?? "dsl") as
+    | "dsl"
+    | "director"
+    | "admin";
+  if (
+    !email ||
+    !email.includes("@") ||
+    (role !== "dsl" && role !== "director" && role !== "admin")
+  ) {
     console.error(
-      'Usage: user:add --email <email> [--role dsl|director] ' +
+      "Usage: user:add --email <email> [--role dsl|director|admin] " +
         '[--tenant <school-slug>] [--trust <trust-slug>] [--name "<name>"]',
     );
     process.exit(1);
   }
 
-  if (role === "director") {
+  // Director and admin are both trust-level accounts; admin additionally holds
+  // in-product user management.
+  if (role === "director" || role === "admin") {
+    const dbRole = role === "admin" ? "ADMIN" : "DIRECTOR";
     const trustSlug = values.trust?.trim();
     if (!trustSlug) {
-      console.error("A director needs --trust <trust-slug>.");
+      console.error(`A ${role} needs --trust <trust-slug>.`);
       process.exit(1);
     }
     const trust = await systemDb.trust.findUnique({ where: { slug: trustSlug } });
@@ -53,7 +63,7 @@ async function main() {
     const user = await systemDb.user.upsert({
       where: { email },
       update: {
-        role: "DIRECTOR",
+        role: dbRole,
         trustId: trust.id,
         tenantId: null,
         ...(values.name ? { name: values.name } : {}),
@@ -61,7 +71,7 @@ async function main() {
       create: {
         email,
         name: values.name ?? null,
-        role: "DIRECTOR",
+        role: dbRole,
         trustId: trust.id,
       },
     });
@@ -81,13 +91,15 @@ async function main() {
           action: "user.provisioned",
           entityType: "user",
           entityId: user.id,
-          metadata: { email, role: "director", trustSlug, via: "user-add-cli" },
+          metadata: { email, role, trustSlug, via: "user-add-cli" },
         },
       });
     }
 
+    const title =
+      role === "admin" ? "Trust Administrator" : "Director of Safeguarding";
     console.info(
-      `Provisioned ${email} as Director of Safeguarding for ${trust.name} ` +
+      `Provisioned ${email} as ${title} for ${trust.name} ` +
         `(user ${user.id}). They can now request a sign-in link.`,
     );
     return;

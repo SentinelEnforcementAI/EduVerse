@@ -65,6 +65,8 @@ export async function getAuthSession(): Promise<AuthSession | null> {
     include: { user: true },
   });
   if (!session || !isSessionActive(session)) return null;
+  // A deactivated account holds no live session, even if the cookie is valid.
+  if (session.user.status === "DEACTIVATED") return null;
 
   return { sessionId: session.id, user: session.user };
 }
