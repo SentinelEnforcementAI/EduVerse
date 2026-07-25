@@ -43,3 +43,15 @@ variable "redis_node_type" {
   type        = string
   default     = "cache.t4g.micro"
 }
+
+variable "rds_multi_az" {
+  description = "Run RDS Multi-AZ (standby in a second AZ for failover). Flip to true before real pupil data arrives; costs roughly double the DB instance."
+  type        = bool
+  default     = false
+}
+
+variable "alerts_email" {
+  description = "Email address subscribed to the CloudWatch alerts SNS topic. Leave empty to create the topic without a subscription (add subscribers later)."
+  type        = string
+  default     = ""
+}

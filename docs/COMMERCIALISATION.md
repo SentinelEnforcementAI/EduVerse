@@ -168,6 +168,9 @@ children and real money" layer.
    DR; a staging environment; error tracking (Sentry); multi-AZ Postgres; WAF;
    secrets rotation; independent penetration test and remediation; and an
    accessibility audit (WCAG 2.1 AA is claimed in DESIGN.md, not yet verified).
+   *(The code + infra parts are done — security headers, a liveness endpoint,
+   an error-reporting seam, CloudWatch alarms, and a multi-AZ switch. The rest
+   is an operational / sign-off checklist — see `docs/HARDENING.md`.)*
 
 When 1-8 are complete and green, the honest statement is: "ready to sell,
 pending CTO sign-off, legal and the Fieldfisher DPA framework."
@@ -185,7 +188,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 | 5 | Billing and metering | Done (per-pupil metering + the flat £50k MAT line, frozen into period snapshots with an invoice lifecycle; an admin billing surface; a billing account provisioned per trust; every action audited; system-context-only RLS so a school never sees billing). The per-pupil rate is provisional and the real payment provider is stubbed — both CTO-DECISIONs, see the slice 5 note. |
 | 6 | Proactive notifications | Done (email alerts: the moment the rules engine raises a serious signal, the worker alerts the school's active DSLs — sealed, idempotent (one alert per DSL per signal), audited, from the worker's own SES role. Push is a follow-on channel, reserved in the schema. See the slice 6 note. |
 | 7 | Rules engine tuning | Done (per-trust configurable thresholds: a rules admin surface where a trust tunes each rule's thresholds, validated and audited; the engine merges the overrides over the defaults at run time and records the effective thresholds on every run, so a tuned run stays auditable and versioning is unaffected. Calibrating the actual values with safeguarding leads is operational. See the slice 7 note. |
-| 8 | Production hardening | Not started |
+| 8 | Production hardening | Code + infra done (security headers/CSP, a liveness endpoint, a structured error-reporting seam wired to the tRPC handler, CloudWatch alarms → SNS on the ALB/RDS/services/app-errors, and a multi-AZ RDS switch). The operational remainder — multi-AZ enablement, second NAT, WAF, a rehearsed DR restore, a staging stack, hosted error tracking, secrets rotation, an independent pen-test, and a WCAG audit — is an itemised CTO sign-off checklist in `docs/HARDENING.md`. |
 
 ### Slice 3 note — Wonde self-connect: what's built, and the remaining edge
 
@@ -281,5 +284,29 @@ What remains is **operational, not code**: calibrating the actual numbers with
 each trust's safeguarding leads against their real data. A natural follow-on is
 per-trust rule enable/disable and a "preview impact" (how many pupils a proposed
 threshold would flag) — neither blocks the definition of done.
+
+### Slice 8 note — hardening: code done, an operational checklist remains
+
+Production hardening is part code, part infra, part operations. The code and
+infra are done and tested: security response headers with a self-only CSP on
+every route; a dependency-free `/api/health` liveness endpoint for the load
+balancer; a structured error-reporting seam every server error flows through
+(the Sentry drop-in point); CloudWatch alarms on the load balancer, database,
+services and application errors, notifying an SNS topic; and a multi-AZ RDS
+switch. What remains is genuinely operational — multi-AZ enablement, a second
+NAT, WAF, a **rehearsed** DR restore, a staging stack, hosted error tracking,
+secrets rotation, an independent penetration test, and a WCAG audit — each an
+explicit CTO sign-off item in `docs/HARDENING.md`.
+
+---
+
+## Where this leaves us
+
+Slices 1–8 are complete in code and infrastructure, each shipped as its own
+reviewed, green PR, with the non-negotiables (sealed identity, human-in-the-loop,
+append-only audit, explainability, eu-west-2 residency) held throughout. What is
+left is not engineering: it is CTO sign-off (the `docs/HARDENING.md` checklist),
+legal, and the Fieldfisher DPA framework. With those in place, the honest
+statement holds: **ready to sell.**
 
 This document is living: update the table and the slice sections as each lands.
