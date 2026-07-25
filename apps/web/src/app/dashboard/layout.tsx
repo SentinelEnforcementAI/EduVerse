@@ -13,6 +13,7 @@ import {
   ScrollText,
   SearchCheck,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
 } from "lucide-react";
 
@@ -141,6 +142,11 @@ export default async function DashboardLayout({
       icon: Rocket,
     });
     nav.push({ href: "/dashboard/admin/users", label: "Users", icon: Users });
+    nav.push({
+      href: "/dashboard/admin/rules",
+      label: "Rules",
+      icon: SlidersHorizontal,
+    });
     nav.push({
       href: "/dashboard/admin/billing",
       label: "Billing",

@@ -26,11 +26,17 @@ export type RuleContext = {
   db: TenantDb;
 };
 
+// A rule's thresholds. Numbers only — days, counts, percentage points — so a
+// trust can tune them and the engine can validate them generically.
+export type RuleParams = Record<string, number>;
+
 export type RuleDefinition = {
   key: string;
   version: number;
   name: string;
   description: string;
-  params: Record<string, number>;
-  evaluate(ctx: RuleContext): Promise<RuleResult[]>;
+  // The default thresholds. A per-trust RuleConfig overrides these at run time;
+  // the effective params are passed to evaluate().
+  params: RuleParams;
+  evaluate(ctx: RuleContext, params?: RuleParams): Promise<RuleResult[]>;
 };

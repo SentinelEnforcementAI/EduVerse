@@ -11,6 +11,7 @@ import { kcsieRouter } from "@/server/api/routers/kcsie";
 import { messagesRouter } from "@/server/api/routers/messages";
 import { overviewRouter } from "@/server/api/routers/overview";
 import { readerRouter } from "@/server/api/routers/reader";
+import { rulesRouter } from "@/server/api/routers/rules";
 import { searchRouter } from "@/server/api/routers/search";
 import { signalsRouter } from "@/server/api/routers/signals";
 import { syncRouter } from "@/server/api/routers/sync";
@@ -37,6 +38,7 @@ export const appRouter = createTRPCRouter({
   wonde: wondeRouter,
   messages: messagesRouter,
   billing: billingRouter,
+  rules: rulesRouter,
 });
 
 export type AppRouter = typeof appRouter;

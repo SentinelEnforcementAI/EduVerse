@@ -320,6 +320,27 @@ model Notification {
   @@map("notifications")
 }
 
+// Per-trust rule threshold overrides (commercialisation slice 7). The five
+// rules ship with default thresholds; a trust can tune them to its own context
+// with safeguarding leads, without a code change. `params` is a PARTIAL override
+// — only the keys a trust changed — merged over the rule's defaults at run time.
+// Trust-level configuration, reached only through the system context (the rules
+// admin router writes it, the engine reads it); a school tenant never touches
+// it. The engine records the effective thresholds on each rule execution, so a
+// run stays fully auditable even when a trust has tuned it.
+model RuleConfig {
+  id          String   @id @default(cuid())
+  trustId     String   @map("trust_id")
+  ruleKey     String   @map("rule_key")
+  params      Json
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([trustId, ruleKey])
+  @@map("rule_configs")
+}
+
 enum InvoiceStatus {
   DRAFT
   ISSUED

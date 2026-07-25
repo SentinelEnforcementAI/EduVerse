@@ -6,7 +6,7 @@ import {
 } from "@sentinel/db";
 
 import { RULES } from "./registry";
-import type { RuleDefinition, RuleResult } from "./types";
+import type { RuleDefinition, RuleParams, RuleResult } from "./types";
 
 // Postgres jsonb does not preserve key order, so param equality must be
 // order-insensitive.
@@ -25,8 +25,62 @@ function stableStringify(value: unknown): string {
 
 export type RuleRunStats = Record<
   string,
-  { fired: number; created: number; updated: number; version: number }
+  {
+    fired: number;
+    created: number;
+    updated: number;
+    version: number;
+    // The effective thresholds this run used — defaults overlaid with any
+    // per-trust tuning. Recorded so a run is auditable even when tuned.
+    params: RuleParams;
+  }
 >;
+
+export type RuleCatalogEntry = {
+  key: string;
+  name: string;
+  description: string;
+  version: number;
+  defaults: RuleParams;
+};
+
+// The rules and their default thresholds, for surfaces that let a trust tune
+// them (the rules admin router). Pure metadata — runs nothing.
+export function ruleCatalog(rules: RuleDefinition[] = RULES): RuleCatalogEntry[] {
+  return rules.map((r) => ({
+    key: r.key,
+    name: r.name,
+    description: r.description,
+    version: r.version,
+    defaults: r.params,
+  }));
+}
+
+// The effective thresholds per rule for a tenant: the rule defaults overlaid
+// with the tenant's trust overrides (RuleConfig). A standalone school (no
+// trust) or an unconfigured trust simply gets the defaults. Overrides are
+// partial — only the keys a trust changed — so an unknown or stale key in a
+// config never removes a default the rule relies on.
+export async function effectiveParamsForTenant(
+  tenantId: string,
+  rules: RuleDefinition[] = RULES,
+): Promise<Map<string, RuleParams>> {
+  const tenant = await systemDb.tenant.findUnique({
+    where: { id: tenantId },
+    select: { trustId: true },
+  });
+  const overrides = tenant?.trustId
+    ? await systemDb.ruleConfig.findMany({ where: { trustId: tenant.trustId } })
+    : [];
+  const byKey = new Map(
+    overrides.map((o) => [o.ruleKey, (o.params ?? {}) as RuleParams]),
+  );
+  const result = new Map<string, RuleParams>();
+  for (const rule of rules) {
+    result.set(rule.key, { ...rule.params, ...(byKey.get(rule.key) ?? {}) });
+  }
+  return result;
+}
 
 export type EngineRunResult = {
   executionId: string;
@@ -83,6 +137,7 @@ export async function runRulesForTenant(
   rules: RuleDefinition[] = RULES,
 ): Promise<EngineRunResult> {
   const ruleVersions = await ensureRuleVersions(rules);
+  const effectiveParams = await effectiveParamsForTenant(tenantId, rules);
   const tenantDb = dbForTenant(tenantId);
 
   const execution = await tenantDb.ruleExecution.create({
@@ -93,8 +148,15 @@ export async function runRulesForTenant(
   try {
     for (const rule of rules) {
       const ruleVersion = ruleVersions.get(rule.key)!;
-      const results = await rule.evaluate({ tenantId, asOf, db: tenantDb });
-      const ruleStats = { fired: results.length, created: 0, updated: 0, version: rule.version };
+      const params = effectiveParams.get(rule.key)!;
+      const results = await rule.evaluate({ tenantId, asOf, db: tenantDb }, params);
+      const ruleStats = {
+        fired: results.length,
+        created: 0,
+        updated: 0,
+        version: rule.version,
+        params,
+      };
 
       for (const result of results) {
         await upsertOpenSignal(tenantDb, tenantId, execution.id, ruleVersion, result, ruleStats);

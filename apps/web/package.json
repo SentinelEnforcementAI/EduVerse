@@ -15,6 +15,7 @@
     "@aws-sdk/client-sesv2": "^3.1092.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@sentinel/db": "workspace:*",
+    "@sentinel/rules": "workspace:*",
     "@tanstack/react-query": "^5.90.5",
     "@trpc/client": "^11.6.0",
     "@trpc/react-query": "^11.6.0",

@@ -161,7 +161,9 @@ children and real money" layer.
    the slice 6 note below.)*
 7. **Rules engine tuning.** Move the five hardcoded rules to per-trust
    configurable thresholds (already flagged CTO-DECISION) and calibrate against
-   real data with safeguarding leads.
+   real data with safeguarding leads. *(Done — thresholds are per-trust
+   configurable and audited; calibration with leads is an operational activity.
+   See the slice 7 note below.)*
 8. **Production hardening.** Monitoring and alerting wired; tested backups and
    DR; a staging environment; error tracking (Sentry); multi-AZ Postgres; WAF;
    secrets rotation; independent penetration test and remediation; and an
@@ -182,7 +184,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 | 4 | Email mission control | Phase 1 done (outbound send: a human reviews a drafted referral/letter and sends it from the platform, threaded to the case; every message is written to an append-only, tenant-isolated communications timeline and the audit log — the machine drafts, the person sends, no auto-send). Phase 2 (inbound safeguarding-mailbox capture) is **not started and DPIA-gated** — see below. |
 | 5 | Billing and metering | Done (per-pupil metering + the flat £50k MAT line, frozen into period snapshots with an invoice lifecycle; an admin billing surface; a billing account provisioned per trust; every action audited; system-context-only RLS so a school never sees billing). The per-pupil rate is provisional and the real payment provider is stubbed — both CTO-DECISIONs, see the slice 5 note. |
 | 6 | Proactive notifications | Done (email alerts: the moment the rules engine raises a serious signal, the worker alerts the school's active DSLs — sealed, idempotent (one alert per DSL per signal), audited, from the worker's own SES role. Push is a follow-on channel, reserved in the schema. See the slice 6 note. |
-| 7 | Rules engine tuning | Not started |
+| 7 | Rules engine tuning | Done (per-trust configurable thresholds: a rules admin surface where a trust tunes each rule's thresholds, validated and audited; the engine merges the overrides over the defaults at run time and records the effective thresholds on every run, so a tuned run stays auditable and versioning is unaffected. Calibrating the actual values with safeguarding leads is operational. See the slice 7 note. |
 | 8 | Production hardening | Not started |
 
 ### Slice 3 note — Wonde self-connect: what's built, and the remaining edge
@@ -261,5 +263,23 @@ to build the deep link.
 Follow-ons: a **push channel** (the `NotificationChannel` enum reserves `PUSH`)
 for mobile/browser alerts, and per-user notification preferences (quiet hours,
 digest vs immediate) — neither blocks the definition of done.
+
+### Slice 7 note — rules tuning: per-trust thresholds, defaults intact
+
+The five rules keep their built-in default thresholds; a trust now tunes any of
+them from a rules admin surface. An override is **partial** (only the keys a
+trust changed) and is stored per trust in `RuleConfig` — system-context-only
+RLS, so a school never touches it. At run time the engine merges the override
+over the rule's defaults and passes the effective thresholds into the rule, and
+it **records those effective thresholds on the execution**, so a tuned run is
+fully auditable — you can always see exactly what thresholds produced a signal.
+Rule **versioning is unaffected**: the immutable (key, version) definitions
+still describe the code; tuning lives alongside them, not in them. Every set and
+reset is audited.
+
+What remains is **operational, not code**: calibrating the actual numbers with
+each trust's safeguarding leads against their real data. A natural follow-on is
+per-trust rule enable/disable and a "preview impact" (how many pupils a proposed
+threshold would flag) — neither blocks the definition of done.
 
 This document is living: update the table and the slice sections as each lands.

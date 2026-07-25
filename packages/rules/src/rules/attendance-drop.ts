@@ -7,7 +7,7 @@ import {
 } from "../helpers";
 import type { RuleDefinition, RuleResult } from "../types";
 
-const params = {
+const defaults = {
   recentDays: 28,
   baselineDays: 84,
   minDropPercentagePoints: 15,
@@ -24,8 +24,8 @@ export const attendanceDrop: RuleDefinition = {
   name: "Attendance drop",
   description:
     "Attendance rate over the last four weeks has dropped sharply against the pupil's previous twelve-week baseline.",
-  params,
-  async evaluate(ctx): Promise<RuleResult[]> {
+  params: defaults,
+  async evaluate(ctx, params = defaults): Promise<RuleResult[]> {
     const windowEnd = ctx.asOf;
     const recentStart = daysBefore(windowEnd, params.recentDays);
     const baselineStart = daysBefore(recentStart, params.baselineDays);

@@ -1,7 +1,7 @@
 import { daysBefore, isoDate } from "../helpers";
 import type { RuleDefinition, RuleResult } from "../types";
 
-const params = {
+const defaults = {
   // Six school weeks in calendar days — matches the "recent cluster" the
   // rule describes.
   recentDays: 42,
@@ -18,8 +18,8 @@ export const behaviourSpike: RuleDefinition = {
   name: "Behaviour spike",
   description:
     "Behaviour incidents in the last six school weeks far exceed the pupil's previous quarterly rate.",
-  params,
-  async evaluate(ctx): Promise<RuleResult[]> {
+  params: defaults,
+  async evaluate(ctx, params = defaults): Promise<RuleResult[]> {
     const windowEnd = ctx.asOf;
     const recentStart = daysBefore(windowEnd, params.recentDays);
     const baselineStart = daysBefore(recentStart, params.baselineDays);
