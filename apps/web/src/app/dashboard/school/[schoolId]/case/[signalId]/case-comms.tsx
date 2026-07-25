@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Download, FileText, Mail, Send } from "lucide-react";
+import { Download, FileText, Mail, MailOpen, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
@@ -113,33 +113,47 @@ export function CommsPanel({
 
   return (
     <div>
-      {/* Communications timeline — every message sent from the platform. */}
+      {/* Communications timeline — sent from and received into the platform. */}
       {messages.length > 0 ? (
         <ul className="mb-5 space-y-2">
-          {messages.map((m) => (
-            <li
-              key={m.id}
-              className="rounded-lg border border-cloud bg-card px-3 py-2.5 text-sm"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <Mail className="size-4 text-muted-foreground" aria-hidden />
-                <span className="font-medium">{m.subject}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    m.status === "SENT"
-                      ? "bg-cobalt-tint text-cobalt"
-                      : "bg-risk-tint text-risk"
-                  }`}
-                >
-                  {m.status === "SENT" ? "Sent" : "Failed"}
-                </span>
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                To {m.to.join(", ")} · {m.sentBy ? `${m.sentBy} · ` : ""}
-                {formatWhen(m.createdAt)}
-              </div>
-            </li>
-          ))}
+          {messages.map((m) => {
+            const inbound = m.direction === "INBOUND";
+            return (
+              <li
+                key={m.id}
+                className={`rounded-lg border px-3 py-2.5 text-sm ${
+                  inbound
+                    ? "border-cobalt/30 bg-cobalt-tint/40"
+                    : "border-cloud bg-card"
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  {inbound ? (
+                    <MailOpen className="size-4 text-cobalt" aria-hidden />
+                  ) : (
+                    <Mail className="size-4 text-muted-foreground" aria-hidden />
+                  )}
+                  <span className="font-medium">{m.subject}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      inbound
+                        ? "bg-cobalt-tint text-cobalt"
+                        : m.status === "SENT"
+                          ? "bg-cobalt-tint text-cobalt"
+                          : "bg-risk-tint text-risk"
+                    }`}
+                  >
+                    {inbound ? "Received" : m.status === "SENT" ? "Sent" : "Failed"}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {inbound
+                    ? `From ${m.from} · ${formatWhen(m.createdAt)}`
+                    : `To ${m.to.join(", ")} · ${m.sentBy ? `${m.sentBy} · ` : ""}${formatWhen(m.createdAt)}`}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 

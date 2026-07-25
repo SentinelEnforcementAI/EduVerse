@@ -184,7 +184,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 | 1 | Access and tenancy foundation | Done (in-product user management: an ADMIN role, invite/re-role/deactivate, soft deactivation that blocks sign-in, all audited). SSO/MFA remain as a follow-up. |
 | 2 | Customer provisioning and onboarding | Done (silo factory: a Provision customer workflow parameterised per MAT, an idempotent audited `provisionCustomer` data layer, and a guided in-product onboarding flow — add schools, invite DSLs. The account-per-MAT vs prefixed-stack choice and DNS/TLS automation remain CTO-DECISIONs — see `docs/PROVISIONING.md`). |
 | 3 | Wonde production self-connect | Done (in-product self-connect: a "Connect Wonde" onboarding step maps each school to its Wonde school from the schools the environment's token can reach, audited on link/unlink, reading only — never writing back to the MIS). The token itself is still set at the stack level (Secrets Manager); OAuth-style token capture in-app remains a CTO-DECISION — see the slice 3 note below. |
-| 4 | Email mission control | Phase 1 done (outbound send: a human reviews a drafted referral/letter and sends it from the platform, threaded to the case; every message is written to an append-only, tenant-isolated communications timeline and the audit log — the machine drafts, the person sends, no auto-send). Phase 2 (inbound safeguarding-mailbox capture) is **not started and DPIA-gated** — see below. |
+| 4 | Email mission control | Both phases built. Phase 1 (outbound send): a human reviews a drafted referral/letter and sends it from the platform, threaded to the case, audited — no auto-send. Phase 2 (inbound capture): inbound mail is matched to a case (by thread or a sealed pupil reference) and recorded as an INBOUND message; unmatched mail lands in a DSL intake queue to assign or dismiss; idempotent and audited. The one remaining piece is **connecting a real safeguarding mailbox (Graph/Workspace OAuth), which is DPIA-gated** — the ingestion + intake pipeline runs on synthetic messages until Fieldfisher signs off. See the slice 4 note. |
 | 5 | Billing and metering | Done (per-pupil metering + the flat £50k MAT line, frozen into period snapshots with an invoice lifecycle; an admin billing surface; a billing account provisioned per trust; every action audited; system-context-only RLS so a school never sees billing). The per-pupil rate is provisional and the real payment provider is stubbed — both CTO-DECISIONs, see the slice 5 note. |
 | 6 | Proactive notifications | Done (email alerts: the moment the rules engine raises a serious signal, the worker alerts the school's active DSLs — sealed, idempotent (one alert per DSL per signal), audited, from the worker's own SES role. Push is a follow-on channel, reserved in the schema. See the slice 6 note. |
 | 7 | Rules engine tuning | Done (per-trust configurable thresholds: a rules admin surface where a trust tunes each rule's thresholds, validated and audited; the engine merges the overrides over the defaults at run time and records the effective thresholds on every run, so a tuned run stays auditable and versioning is unaffected. Calibrating the actual values with safeguarding leads is operational. See the slice 7 note. |
@@ -219,13 +219,26 @@ FAILED message rather than lost. This is the "download and paste into Outlook"
 step replaced by one audited click — the communication now lives in the system.
 Human-in-the-loop is structural: there is no auto-send anywhere.
 
-**Phase 2 (inbound capture) is not started, and is gated on Fieldfisher's
-DPIA.** Connecting a school's dedicated safeguarding mailbox and surfacing
-inbound mail against cases is the biggest special-category-data surface in the
-product; per §2 it must be scoped into the DPIA at design time, not after. The
-`CaseMessage` model already carries `direction` (INBOUND reserved), `threadId`
-and `providerMessageId` so inbound threading drops onto the same record without
-a migration.
+**Phase 2 (inbound capture) is built, bar the live mailbox connection — which
+stays gated on Fieldfisher's DPIA.** Inbound mail is matched to a case — by the
+provider thread (a reply to a message on the case) or a sealed pupil reference
+in the subject/body — and recorded as an **INBOUND `CaseMessage`** on the case;
+mail that can't be matched confidently lands in a per-school **intake queue** for
+a DSL to assign to the right child's case or dismiss, so a teacher's emailed
+concern is never lost in an unread inbox. Ingestion is idempotent (by the
+provider message id) and every match, assignment and dismissal is audited. The
+`CaseMessage` model already carried `direction`/`threadId`/`providerMessageId`,
+so this needed no change there — only a new `IntakeItem` model.
+
+What is **still gated on the DPIA** is connecting a *real* mailbox: the
+Graph / Workspace OAuth to a school's **dedicated** safeguarding mailbox (never a
+personal inbox), scoped to that mailbox only. Inbound mail bodies about children
+are the biggest special-category-data surface in the product, so — per §2 — a
+real connection waits until Fieldfisher's DPIA/DPA explicitly covers it. Until
+then the `MailboxConnector` is a stub that fetches nothing, and the ingestion +
+intake pipeline is exercised with synthetic messages. Wiring the real connector
+(per-tenant token in Secrets Manager, worker poll/webhook) is the remaining
+integration, mirroring the Wonde self-connect seam.
 
 ### Slice 5 note — billing: metering is real, the payment rail is stubbed
 

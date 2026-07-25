@@ -7,6 +7,7 @@ import {
   FileText,
   Flag,
   FolderOpen,
+  Inbox,
   LayoutDashboard,
   LineChart,
   Rocket,
@@ -54,6 +55,12 @@ export default async function DashboardLayout({
   const counts = await api.overview.counts();
 
   const dslSchoolId = tenancy.schools[0]?.id;
+  // Pending inbound-mail intake awaiting a DSL (phase 2). Only meaningful for a
+  // single-school DSL view; a director triages within a school.
+  const intakeCount =
+    !isDirector && dslSchoolId
+      ? await api.intake.count({ schoolId: dslSchoolId })
+      : 0;
   const schoolBase = dslSchoolId
     ? `/dashboard/school/${dslSchoolId}`
     : "/dashboard";
@@ -113,6 +120,12 @@ export default async function DashboardLayout({
           href: `${schoolBase}/documents`,
           label: "Documents",
           icon: FolderOpen,
+        },
+        {
+          href: `${schoolBase}/intake`,
+          label: "Intake",
+          icon: Inbox,
+          badge: intakeCount,
         },
         {
           href: "/dashboard/alerts",
