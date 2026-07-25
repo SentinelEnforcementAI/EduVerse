@@ -12,6 +12,7 @@
     "worker:prod": "tsx src/worker.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.1092.0",
     "@sentinel/db": "workspace:*",
     "bullmq": "^5.66.5",
     "ioredis": "^5.9.1",

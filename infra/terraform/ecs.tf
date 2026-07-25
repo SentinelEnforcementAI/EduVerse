@@ -79,6 +79,11 @@ resource "aws_ecs_task_definition" "worker" {
     environment = [
       { name = "NODE_ENV", value = "production" },
       { name = "REDIS_URL", value = local.redis_url },
+      # Proactive alerts (slice 6): the worker sends serious-signal alerts to
+      # DSLs. APP_URL builds the sealed case deep-link in the email.
+      { name = "EMAIL_TRANSPORT", value = "ses" },
+      { name = "EMAIL_FROM", value = var.email_from },
+      { name = "APP_URL", value = var.app_url },
     ]
     secrets = [
       {

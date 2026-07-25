@@ -148,6 +148,9 @@ importers:
 
   packages/sync:
     dependencies:
+      '@aws-sdk/client-sesv2':
+        specifier: ^3.1092.0
+        version: 3.1092.0
       '@sentinel/db':
         specifier: workspace:*
         version: link:../db

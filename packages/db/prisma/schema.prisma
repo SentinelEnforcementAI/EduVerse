@@ -286,6 +286,40 @@ model BillingAccount {
   @@map("billing_accounts")
 }
 
+enum NotificationChannel {
+  EMAIL
+  PUSH // reserved for a future push channel
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+}
+
+// A proactive alert sent to a person the moment a serious signal is raised
+// (commercialisation slice 6). A DSL is told to review, rather than relying on
+// checking the dashboard. Append-only, tenant-isolated. Sealed: the alert never
+// carries a pupil's name — it references the sealed pupil and links to the case,
+// where reveal is gated and audited. Idempotent: one alert per recipient per
+// signal per channel, so a re-run of the rules engine never re-alerts.
+model Notification {
+  id        String              @id @default(cuid())
+  tenantId  String              @map("tenant_id")
+  signalId  String              @map("signal_id")
+  pupilId   String              @map("pupil_id")
+  // The recipient (a DSL of the school).
+  userId    String              @map("user_id")
+  channel   NotificationChannel @default(EMAIL)
+  status    NotificationStatus  @default(SENT)
+  toAddress String              @map("to_address")
+  subject   String
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  @@unique([signalId, userId, channel])
+  @@index([tenantId, createdAt])
+  @@map("notifications")
+}
+
 enum InvoiceStatus {
   DRAFT
   ISSUED
