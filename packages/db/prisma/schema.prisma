@@ -262,6 +262,40 @@ model CaseMessage {
   @@map("case_messages")
 }
 
+enum IntakeStatus {
+  PENDING
+  ASSIGNED
+  DISMISSED
+}
+
+// Inbound safeguarding mail that could not be matched to a case automatically
+// (commercialisation slice 4, phase 2: inbound capture). It lands here for a
+// DSL to assign to the right child's case, or dismiss — so a teacher's emailed
+// concern is never lost in an unread inbox ("nothing slips through the gaps").
+// Matched inbound mail becomes an INBOUND CaseMessage directly and never
+// reaches this queue. Tenant-isolated; sealed on the list surface (no pupil is
+// named — the DSL reads and assigns). provider_message_id is unique so the
+// same inbound message is never ingested twice.
+model IntakeItem {
+  id                String       @id @default(cuid())
+  tenantId          String       @map("tenant_id")
+  fromAddress       String       @map("from_address")
+  toAddress         String       @map("to_address")
+  subject           String
+  body              String
+  threadId          String?      @map("thread_id")
+  providerMessageId String?      @unique @map("provider_message_id")
+  receivedAt        DateTime     @map("received_at")
+  status            IntakeStatus @default(PENDING)
+  // Set when a DSL assigns the item to a case (creating an INBOUND CaseMessage).
+  assignedSignalId  String?      @map("assigned_signal_id")
+  assignedById      String?      @map("assigned_by_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  @@index([tenantId, status, receivedAt])
+  @@map("intake_items")
+}
+
 // Commercial billing for a Multi-Academy Trust (commercialisation slice 5).
 // One account per trust; pricing is cost-per-pupil plus a flat fee per MAT.
 // Billing is trust-level, not pupil data — it is reached only by a trust

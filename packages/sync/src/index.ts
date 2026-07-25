@@ -31,3 +31,10 @@ export {
   type DispatchResult,
 } from "./notify/dispatch";
 export { sendAlertEmail, setAlertSenderForTesting } from "./notify/mailer";
+export { ingestInbound, type IngestResult } from "./mailbox/ingest";
+export {
+  getMailboxConnector,
+  setMailboxConnectorForTesting,
+  type InboundMessage,
+  type MailboxConnector,
+} from "./mailbox/connector";
