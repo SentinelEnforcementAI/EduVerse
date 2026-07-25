@@ -93,8 +93,16 @@ describe("engine against embedded ground truth", () => {
     const before = await tenantDb.signal.count();
     expect(before).toBeGreaterThan(0);
 
-    // A DSL has actioned one signal — the engine must not touch it.
-    const actioned = await tenantDb.signal.findFirst({ where: { status: "OPEN" } });
+    // A DSL has actioned one signal — the engine must not touch it. Pick a
+    // rule-GENERATED open signal (deterministically, earliest first): the
+    // flagship school is also seeded with hand-crafted "demo-hero" signals that
+    // no rule produces, so dismissing one of those would leave nothing for the
+    // re-run to recreate (created would be 0). Excluding them makes this
+    // deterministic — the dismissed signal's rule fires again and recreates it.
+    const actioned = await tenantDb.signal.findFirst({
+      where: { status: "OPEN", ruleVersion: { key: { not: "demo-hero" } } },
+      orderBy: { createdAt: "asc" },
+    });
     await tenantDb.signal.update({
       where: { id: actioned!.id },
       data: { status: "DISMISSED" },
