@@ -19,6 +19,11 @@
     "db:seed": "pnpm --filter @sentinel/db db:seed",
     "worker": "pnpm --filter @sentinel/sync worker",
     "sync": "pnpm --filter @sentinel/sync trigger",
-    "rules": "pnpm --filter @sentinel/rules run-rules"
+    "rules": "pnpm --filter @sentinel/rules run-rules",
+    "demo:tour": "pnpm --filter @sentinel/db exec dotenv -e ../../.env -- tsx scripts/demo-tour-context.ts > tooling/screenshots/.context.json && node tooling/screenshots/capture.mjs && node tooling/screenshots/build-gallery.mjs",
+    "demo:tour:embed": "node tooling/screenshots/build-gallery.mjs --embed docs/demo/tour/platform-gallery.embedded.html"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.0"
   }
 }

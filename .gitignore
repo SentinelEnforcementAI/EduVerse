@@ -22,3 +22,8 @@ coverage/
 *.log
 **/prisma/seed-manifest.json
 dump.rdb
+
+# Demo tour: local capture context (mints session cookies) and on-demand
+# embedded gallery output. The screens/ and thin gallery.html ARE committed.
+tooling/screenshots/.context.json
+docs/demo/tour/*.embedded.html

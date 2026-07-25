@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Sentinel Watch — platform tour</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#f6f7fb; --panel:#fff; --ink:#141726; --muted:#5b6072;
+    --line:#e6e8f0; --line-2:#eef0f6;
+    --accent:#4f46e5; --accent-soft:#eef0ff; --accent-ink:#3730a3;
+    --shadow:0 1px 2px rgba(20,23,38,.04),0 8px 28px rgba(20,23,38,.06);
+    --maxw:1120px;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0c0e16;--panel:#151826;--ink:#eceefb;--muted:#9aa0b6;--line:#242840;
+    --line-2:#1c2032;--accent:#8b8cf8;--accent-soft:#1c1f39;--accent-ink:#c3c4fb;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 34px rgba(0,0,0,.45);}}
+  :root[data-theme="dark"]{
+    --bg:#0c0e16;--panel:#151826;--ink:#eceefb;--muted:#9aa0b6;--line:#242840;
+    --line-2:#1c2032;--accent:#8b8cf8;--accent-soft:#1c1f39;--accent-ink:#c3c4fb;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 34px rgba(0,0,0,.45);}
+  :root[data-theme="light"]{
+    --bg:#f6f7fb;--panel:#fff;--ink:#141726;--muted:#5b6072;--line:#e6e8f0;
+    --line-2:#eef0f6;--accent:#4f46e5;--accent-soft:#eef0ff;--accent-ink:#3730a3;
+    --shadow:0 1px 2px rgba(20,23,38,.04),0 8px 28px rgba(20,23,38,.06);}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 82%,transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .top .wrap{display:flex;align-items:center;gap:20px;height:56px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em}
+  .brand .mk{width:20px;height:20px;border-radius:6px;
+    background:conic-gradient(from 210deg,var(--accent),#8b8cf8 60%,var(--accent));
+    box-shadow:inset 0 0 0 3px var(--panel)}
+  .topnav{margin-left:auto;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+  .topnav::-webkit-scrollbar{display:none}
+  .topnav a{font-size:13px;color:var(--muted);text-decoration:none;padding:6px 10px;
+    border-radius:8px;white-space:nowrap}
+  .topnav a:hover{color:var(--ink);background:var(--line-2)}
+  .hero{padding:72px 0 40px}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 18px}
+  .hero h1{font-size:clamp(32px,5vw,52px);line-height:1.05;letter-spacing:-.03em;
+    margin:0 0 18px;text-wrap:balance;font-weight:680}
+  .hero p{font-size:clamp(16px,2vw,19px);color:var(--muted);max-width:64ch;margin:0}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:40px 0 8px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 20px;box-shadow:var(--shadow)}
+  .stat b{display:block;font-size:26px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat span{font-size:12.5px;color:var(--muted)}
+  @media(max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .principles{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    background:var(--panel);margin-top:36px}
+  .principles .wrap{display:grid;grid-template-columns:repeat(5,1fr);gap:0;padding:0}
+  .pr{padding:26px 22px;border-left:1px solid var(--line-2)}
+  .pr:first-child{border-left:0}
+  .pr h3{margin:0 0 6px;font-size:14px;letter-spacing:-.01em}
+  .pr p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.5}
+  @media(max-width:900px){.principles .wrap{grid-template-columns:repeat(2,1fr)}
+    .pr{border-left:0;border-top:1px solid var(--line-2)}
+    .pr:first-child,.pr:nth-child(2){border-top:0}}
+  @media(max-width:520px){.principles .wrap{grid-template-columns:1fr}}
+  .sec{padding:64px 0}
+  .sec+.sec{border-top:1px solid var(--line)}
+  .sechead{max-width:70ch}
+  .kicker{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 14px}
+  .sechead h2{font-size:clamp(24px,3.4vw,34px);letter-spacing:-.025em;margin:0 0 14px;
+    text-wrap:balance;font-weight:660}
+  .lede{font-size:16.5px;color:var(--muted);margin:0}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:28px;margin-top:40px}
+  .grid.one{grid-template-columns:1fr;max-width:940px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .shot{margin:0;display:flex;flex-direction:column;gap:14px}
+  .frame{border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    background:var(--panel);box-shadow:var(--shadow)}
+  .bar{display:flex;align-items:center;gap:7px;padding:10px 14px;
+    border-bottom:1px solid var(--line-2);background:var(--panel)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
+  .chip{margin-left:8px;font-size:11px;font-weight:600;color:var(--accent-ink);
+    background:var(--accent-soft);border-radius:999px;padding:3px 9px;white-space:nowrap}
+  .loc{margin-left:auto;font:12px var(--mono);color:var(--muted);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40%}
+  .imgbtn{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in}
+  .imgbtn img{display:block;width:100%;height:auto;max-height:560px;object-fit:cover;
+    object-position:top}
+  .grid.one .imgbtn img{max-height:none}
+  figcaption{font-size:13.5px;color:var(--muted);line-height:1.55;padding:0 2px}
+  figcaption strong{color:var(--ink);font-weight:600}
+  figcaption em{color:var(--accent-ink);font-style:normal;font-weight:500}
+  .lb{position:fixed;inset:0;z-index:50;background:rgba(8,9,15,.86);display:none;
+    padding:28px;overflow:auto}
+  .lb.open{display:block}
+  .lb img{display:block;max-width:1200px;width:100%;margin:0 auto;border-radius:10px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .lb .x{position:fixed;top:18px;right:22px;font:600 14px var(--sans);color:#fff;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+    border-radius:999px;padding:8px 16px;cursor:pointer}
+  footer{border-top:1px solid var(--line);padding:40px 0 64px;color:var(--muted);font-size:13px}
+  .foot{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .tag{font:11px var(--mono);letter-spacing:.04em;border:1px solid var(--line);
+    border-radius:999px;padding:4px 10px;color:var(--muted)}
+  html{scroll-behavior:smooth}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <div class="brand"><span class="mk"></span> Sentinel Watch</div>
+  <nav class="topnav"><a href="#core">The core loop</a><a href="#trust">Trust command</a><a href="#school">The school desk</a><a href="#email">Email mission control</a><a href="#ops">Safeguarding operations</a><a href="#admin">Commercialisation</a><a href="#access">Access</a></nav>
+</div></div>
+<header class="hero"><div class="wrap">
+  <p class="eyebrow">Platform tour · design-partner MVP</p>
+  <h1>Safeguarding intelligence for UK schools and trusts.</h1>
+  <p>Sentinel Watch reads the data schools already hold — attendance, behaviour, attainment, pastoral — connects the dots a busy DSL cannot, and surfaces the child who needs attention, with the reasoning attached, days before the next scheduled meeting would have caught it. The system flags; a human always decides. Every screen below is running software against a seeded database — not mockups, and not a real child.</p>
+  <div class="stats"><div class="stat"><b>5</b><span>schools in the demo trust</span></div><div class="stat"><b>1,100</b><span>synthetic pupils, 12 months of data</span></div><div class="stat"><b>3</b><span>roles — director, DSL, administrator</span></div><div class="stat"><b>24</b><span>screens, all running software</span></div></div>
+</div></header>
+<div class="principles"><div class="wrap"><div class="pr"><h3>Human-in-the-loop</h3><p>The system flags. A person always decides. Enforced in schema and code, not copy.</p></div><div class="pr"><h3>UK data residency</h3><p>All data and inference stays in AWS London. No pupil data leaves UK infrastructure.</p></div><div class="pr"><h3>Explainability</h3><p>Every signal carries its reasoning — which rule fired, on which data points.</p></div><div class="pr"><h3>Full audit</h3><p>Every read and write against a child’s record is logged. Append-only. Soft-delete only.</p></div><div class="pr"><h3>Overlay-first</h3><p>Reads from source systems via Wonde. Never writes back to the school’s MIS.</p></div></div></div>
+<main class="wrap">
+  <section class="sec" id="core">
+    <header class="sechead">
+      <p class="kicker">The core loop</p>
+      <h2>A signal, its reasoning, and a human decision</h2>
+      <p class="lede">Everything funnels to this screen. The risk engine flags a pattern; the DSL sees exactly why, with every underlying data point; and the DSL — never the system — decides what happens next.</p>
+    </header>
+    <div class="grid one">
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/case</span>
+        </div>
+        <button class="imgbtn" data-full="15-case-detail" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/15-case-detail.jpg" alt="15-case-detail">
+        </button>
+      </div>
+      <figcaption>The case view. Identity is <strong>sealed by default</strong> (“Pupil 0013”; reveal is a deliberate, audited action). “What Watch sees” traces every indicator to its source record. The decision panel is explicit that <strong>Watch never closes a case</strong> — referral, case file, pastoral review and case notes sit under the DSL’s hand, and a communications thread (outbound + captured replies) files onto the case.</figcaption>
+    </figure></div>
+  </section>
+  <section class="sec" id="trust">
+    <header class="sechead">
+      <p class="kicker">Trust command</p>
+      <h2>The whole trust on one screen</h2>
+      <p class="lede">A Director of Safeguarding oversees every school in the trust — with cross-school pattern intelligence no single school can see. The role boundary is enforced at the database with row-level security, not hidden in the UI.</p>
+    </header>
+    <div class="grid">
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/trust</span>
+        </div>
+        <button class="imgbtn" data-full="01-trust-overview" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/01-trust-overview.jpg" alt="01-trust-overview">
+        </button>
+      </div>
+      <figcaption>Trust overview — pupils, active concerns, and a decision queue across five schools, with <strong>cross-school pattern intelligence</strong> that surfaces the same concern in the same year group across multiple schools at once.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/trust/triage</span>
+        </div>
+        <button class="imgbtn" data-full="03-trust-concerns" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/03-trust-concerns.jpg" alt="03-trust-concerns">
+        </button>
+      </div>
+      <figcaption>The trust-wide triage queue, ordered by escalation level — every concern awaiting a decision, across the whole trust.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/schools</span>
+        </div>
+        <button class="imgbtn" data-full="02-schools" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/02-schools.jpg" alt="02-schools">
+        </button>
+      </div>
+      <figcaption>Five schools, each an isolated tenant. One database, tenant-scoped, RLS-enforced.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/insights</span>
+        </div>
+        <button class="imgbtn" data-full="05-insights" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/05-insights.jpg" alt="05-insights">
+        </button>
+      </div>
+      <figcaption>Insights — trends across the trust, for governors and safeguarding leads.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/reports</span>
+        </div>
+        <button class="imgbtn" data-full="04-reports" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/04-reports.jpg" alt="04-reports">
+        </button>
+      </div>
+      <figcaption>Board- and governor-ready reporting.</figcaption>
+    </figure></div>
+  </section>
+  <section class="sec" id="school">
+    <header class="sechead">
+      <p class="kicker">The school desk</p>
+      <h2>Everything a DSL works from</h2>
+      <p class="lede">A school DSL sees only their own school. The desk brings the concern queue, the case file, the document library and the compliance surfaces into one place.</p>
+    </header>
+    <div class="grid">
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/dashboard/school</span>
+        </div>
+        <button class="imgbtn" data-full="13-school-overview" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/13-school-overview.jpg" alt="13-school-overview">
+        </button>
+      </div>
+      <figcaption>The school overview — the DSL’s Monday-morning picture.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/triage/active</span>
+        </div>
+        <button class="imgbtn" data-full="14-school-concerns" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/14-school-concerns.jpg" alt="14-school-concerns">
+        </button>
+      </div>
+      <figcaption>The concern queue with status tabs — awaiting a decision, confirmed, escalated, dismissed. Every transition is audited.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/documents</span>
+        </div>
+        <button class="imgbtn" data-full="16-documents" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/16-documents.jpg" alt="16-documents">
+        </button>
+      </div>
+      <figcaption>The document library — MASH responses, training certificates, filed correspondence.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/documents/…</span>
+        </div>
+        <button class="imgbtn" data-full="17-document-reader" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/17-document-reader.jpg" alt="17-document-reader">
+        </button>
+      </div>
+      <figcaption>The in-app document reader.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/kcsie</span>
+        </div>
+        <button class="imgbtn" data-full="19-school-kcsie" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/19-school-kcsie.jpg" alt="19-school-kcsie">
+        </button>
+      </div>
+      <figcaption>KCSIE 2024 compliance — evidence and tasks mapped to the statutory framework.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/inspection</span>
+        </div>
+        <button class="imgbtn" data-full="20-school-inspection" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/20-school-inspection.jpg" alt="20-school-inspection">
+        </button>
+      </div>
+      <figcaption>Inspection view — the evidence an Ofsted conversation needs, on demand.</figcaption>
+    </figure></div>
+  </section>
+  <section class="sec" id="email">
+    <header class="sechead">
+      <p class="kicker">Email mission control</p>
+      <h2>No concern lost in an inbox</h2>
+      <p class="lede">Safeguarding mail is captured, auto-threaded onto the right case where it matches, and everything else lands in an intake queue for a human to place — nothing slips through the gaps. Outbound is drafted by the DSL and sent from the case; the platform never sends anything itself.</p>
+    </header>
+    <div class="grid one">
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">School DSL</span><span class="loc">/intake</span>
+        </div>
+        <button class="imgbtn" data-full="18-intake" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/18-intake.jpg" alt="18-intake">
+        </button>
+      </div>
+      <figcaption>The intake queue. Inbound mail that couldn’t be matched automatically waits here — the DSL assigns each to the right case (filing it as a message on that case) or dismisses it. Matching uses the thread or a <strong>sealed pupil reference</strong>, never a name in plain text. The live mailbox connection is a documented, DPIA-gated stub until sign-off.</figcaption>
+    </figure></div>
+  </section>
+  <section class="sec" id="ops">
+    <header class="sechead">
+      <p class="kicker">Safeguarding operations</p>
+      <h2>Alerts, governance, audit, out-of-hours</h2>
+      <p class="lede">The surrounding operational surfaces — how serious signals reach a person, how the trust assures itself, and the append-only record underneath it all.</p>
+    </header>
+    <div class="grid">
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/alerts</span>
+        </div>
+        <button class="imgbtn" data-full="06-alerts" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/06-alerts.jpg" alt="06-alerts">
+        </button>
+      </div>
+      <figcaption>Serious-signal alerts — the most urgent concerns escalated to a person, sealed and audited.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/governance</span>
+        </div>
+        <button class="imgbtn" data-full="07-governance" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/07-governance.jpg" alt="07-governance">
+        </button>
+      </div>
+      <figcaption>Governance and assurance — the trust’s safeguarding posture at a glance.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/oncall</span>
+        </div>
+        <button class="imgbtn" data-full="08-oncall" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/08-oncall.jpg" alt="08-oncall">
+        </button>
+      </div>
+      <figcaption>The out-of-hours on-call view.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/audit</span>
+        </div>
+        <button class="imgbtn" data-full="09-audit-log" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/09-audit-log.jpg" alt="09-audit-log">
+        </button>
+      </div>
+      <figcaption>The append-only audit log — who read or wrote what, when, and why. Safeguarding records are never hard-deleted.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/dashboard/search</span>
+        </div>
+        <button class="imgbtn" data-full="12-search" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/12-search.jpg" alt="12-search">
+        </button>
+      </div>
+      <figcaption>Search across pupils, concerns and schools.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/trust/inspection</span>
+        </div>
+        <button class="imgbtn" data-full="10-trust-inspection" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/10-trust-inspection.jpg" alt="10-trust-inspection">
+        </button>
+      </div>
+      <figcaption>Trust-level inspection readiness.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Director of Safeguarding</span><span class="loc">/trust/kcsie</span>
+        </div>
+        <button class="imgbtn" data-full="11-trust-kcsie" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/11-trust-kcsie.jpg" alt="11-trust-kcsie">
+        </button>
+      </div>
+      <figcaption>KCSIE compliance rolled up across the trust.</figcaption>
+    </figure></div>
+  </section>
+  <section class="sec" id="admin">
+    <header class="sechead">
+      <p class="kicker">Commercialisation · administration</p>
+      <h2>Ready to onboard, meter, and tune per customer</h2>
+      <p class="lede">The commercialisation layer that turns the product into something a trust can be sold, set up on, and billed for — self-serve for a trust administrator, all audited.</p>
+    </header>
+    <div class="grid">
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Trust administrator</span><span class="loc">/admin/onboarding</span>
+        </div>
+        <button class="imgbtn" data-full="21-admin-onboarding" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/21-admin-onboarding.jpg" alt="21-admin-onboarding">
+        </button>
+      </div>
+      <figcaption>Guided onboarding — add schools, invite safeguarding leads, and <strong>connect Wonde</strong> to bring in attendance, behaviour and attainment. The platform only ever <em>reads</em> from the MIS; the live connect is DPIA-gated.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Trust administrator</span><span class="loc">/admin/users</span>
+        </div>
+        <button class="imgbtn" data-full="22-admin-users" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/22-admin-users.jpg" alt="22-admin-users">
+        </button>
+      </div>
+      <figcaption>User management — invite-only accounts, role assignment (director / DSL / admin) and deactivation, every action audited.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Trust administrator</span><span class="loc">/admin/rules</span>
+        </div>
+        <button class="imgbtn" data-full="23-admin-rules" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/23-admin-rules.jpg" alt="23-admin-rules">
+        </button>
+      </div>
+      <figcaption>Per-trust rule tuning — the thresholds the risk engine uses to raise a concern, adjustable per trust. The engine still runs first, always; these change only when a rule <em>fires</em>, never whether a human decides.</figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Trust administrator</span><span class="loc">/admin/billing</span>
+        </div>
+        <button class="imgbtn" data-full="24-admin-billing" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/24-admin-billing.jpg" alt="24-admin-billing">
+        </button>
+      </div>
+      <figcaption>Metered billing — cost per pupil plus a flat trust fee, metered from live pupil numbers, every snapshot audited.</figcaption>
+    </figure></div>
+  </section>
+  <section class="sec" id="access">
+    <header class="sechead">
+      <p class="kicker">Access</p>
+      <h2>Invite-only, magic-link sign-in</h2>
+      <p class="lede">There is no open sign-up. Accounts are provisioned; sign-in is an emailed magic link, structured so school SSO can replace it later without a schema change.</p>
+    </header>
+    <div class="grid one">
+    <figure class="shot">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="chip">Signed out</span><span class="loc">/sign-in</span>
+        </div>
+        <button class="imgbtn" data-full="00-sign-in" aria-label="Expand screenshot">
+          <img loading="lazy" src="screens/00-sign-in.jpg" alt="00-sign-in">
+        </button>
+      </div>
+      <figcaption>The sign-in screen — request a magic link, invite-only.</figcaption>
+    </figure></div>
+  </section></main>
+<footer><div class="wrap foot">
+  <span>Sentinel Watch — design-partner MVP.</span>
+  <span class="tag">KCSIE 2024 aligned</span>
+  <span class="tag">UK GDPR</span>
+  <span class="tag">Data residency: UK (eu-west-2)</span>
+  <span class="tag">Synthetic data only</span>
+</div></footer>
+<div class="lb" id="lb"><button class="x" id="lbx">Close ✕</button><img id="lbimg" alt=""></div>
+<script>
+  const map={};
+  document.querySelectorAll(".imgbtn").forEach(b=>{map[b.dataset.full]=b.querySelector("img").src;});
+  const lb=document.getElementById("lb"),lbimg=document.getElementById("lbimg");
+  document.querySelectorAll(".imgbtn").forEach(b=>b.addEventListener("click",()=>{
+    lbimg.src=map[b.dataset.full];lb.classList.add("open");document.body.style.overflow="hidden";}));
+  function close(){lb.classList.remove("open");document.body.style.overflow="";lbimg.src="";}
+  document.getElementById("lbx").addEventListener("click",close);
+  lb.addEventListener("click",e=>{if(e.target===lb)close();});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
+</script>
+</body>
+</html>
