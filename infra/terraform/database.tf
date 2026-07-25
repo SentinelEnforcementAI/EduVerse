@@ -32,9 +32,10 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project}-db-final"
 
-  # CTO-DECISION: multi_az = true before real pupil data arrives. Single-AZ
-  # keeps the design-partner MVP affordable.
-  multi_az = false
+  # Multi-AZ failover. Off by default to keep the design-partner MVP
+  # affordable; flip rds_multi_az = true before real pupil data arrives (a
+  # standing CTO-DECISION in docs/HARDENING.md).
+  multi_az = var.rds_multi_az
 }
 
 resource "aws_elasticache_subnet_group" "main" {
