@@ -26,3 +26,8 @@ export {
   registerNightlyRulesRun,
   type RulesJobPayload,
 } from "./rules-queue";
+export {
+  dispatchSeriousSignalAlerts,
+  type DispatchResult,
+} from "./notify/dispatch";
+export { sendAlertEmail, setAlertSenderForTesting } from "./notify/mailer";

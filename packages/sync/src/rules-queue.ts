@@ -4,6 +4,8 @@ import type IORedis from "ioredis";
 import { systemDb } from "@sentinel/db";
 import { runRulesForTenant } from "@sentinel/rules";
 
+import { dispatchSeriousSignalAlerts } from "./notify/dispatch";
+
 export const RULES_QUEUE_NAME = "rules-runs";
 
 export type RulesJobPayload = {
@@ -84,6 +86,20 @@ export function createRulesWorker(
       // The engine records its own execution log (rule_executions) with
       // per-rule stats — that is the audit surface for scheduled runs.
       const result = await runRulesForTenant(job.data.tenantId);
+
+      // The moment a serious signal is raised, alert the school's DSLs
+      // (commercialisation slice 6). Idempotent, so an extra run never
+      // re-alerts. A dispatch failure must not fail the rules run — the
+      // signals are safely recorded either way — so it is logged and swallowed.
+      try {
+        await dispatchSeriousSignalAlerts(job.data.tenantId);
+      } catch (error) {
+        console.error(
+          `alert dispatch failed for tenant ${job.data.tenantId}:`,
+          error,
+        );
+      }
+
       return result.stats;
     },
     { connection, concurrency: 1 },

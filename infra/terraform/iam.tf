@@ -79,7 +79,8 @@ resource "aws_iam_role_policy" "web_task_permissions" {
   })
 }
 
-# Worker task role: nothing beyond network access to RDS/Redis today.
+# Worker task role: send proactive safeguarding alerts via SES (slice 6) —
+# pinned to eu-west-2 in code; IAM narrows it again here.
 resource "aws_iam_role" "worker_task" {
   name = "${var.project}-worker-task"
 
@@ -89,6 +90,24 @@ resource "aws_iam_role" "worker_task" {
       Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
       Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "worker_task_permissions" {
+  name = "ses-alerts"
+  role = aws_iam_role.worker_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "SendAlertEmail"
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail"]
+      Resource = "*"
+      Condition = {
+        StringEquals = { "aws:RequestedRegion" = "eu-west-2" }
+      }
     }]
   })
 }

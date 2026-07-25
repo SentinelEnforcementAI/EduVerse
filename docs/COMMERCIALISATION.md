@@ -156,7 +156,9 @@ children and real money" layer.
    invoice lifecycle are built; the real payment provider is stubbed, a
    CTO-DECISION. See the slice 5 note below.)*
 6. **Proactive notifications.** DSLs alerted (email/push) the moment a serious
-   signal is raised, not reliant on checking the dashboard.
+   signal is raised, not reliant on checking the dashboard. *(Done — email
+   alerts fire from the worker after each rules run; push is a follow-on. See
+   the slice 6 note below.)*
 7. **Rules engine tuning.** Move the five hardcoded rules to per-trust
    configurable thresholds (already flagged CTO-DECISION) and calibrate against
    real data with safeguarding leads.
@@ -179,7 +181,7 @@ pending CTO sign-off, legal and the Fieldfisher DPA framework."
 | 3 | Wonde production self-connect | Done (in-product self-connect: a "Connect Wonde" onboarding step maps each school to its Wonde school from the schools the environment's token can reach, audited on link/unlink, reading only — never writing back to the MIS). The token itself is still set at the stack level (Secrets Manager); OAuth-style token capture in-app remains a CTO-DECISION — see the slice 3 note below. |
 | 4 | Email mission control | Phase 1 done (outbound send: a human reviews a drafted referral/letter and sends it from the platform, threaded to the case; every message is written to an append-only, tenant-isolated communications timeline and the audit log — the machine drafts, the person sends, no auto-send). Phase 2 (inbound safeguarding-mailbox capture) is **not started and DPIA-gated** — see below. |
 | 5 | Billing and metering | Done (per-pupil metering + the flat £50k MAT line, frozen into period snapshots with an invoice lifecycle; an admin billing surface; a billing account provisioned per trust; every action audited; system-context-only RLS so a school never sees billing). The per-pupil rate is provisional and the real payment provider is stubbed — both CTO-DECISIONs, see the slice 5 note. |
-| 6 | Proactive notifications | Not started |
+| 6 | Proactive notifications | Done (email alerts: the moment the rules engine raises a serious signal, the worker alerts the school's active DSLs — sealed, idempotent (one alert per DSL per signal), audited, from the worker's own SES role. Push is a follow-on channel, reserved in the schema. See the slice 6 note. |
 | 7 | Rules engine tuning | Not started |
 | 8 | Production hardening | Not started |
 
@@ -242,5 +244,22 @@ Two **CTO-DECISIONs** remain, both isolated behind seams:
   (Stripe or equivalent): a Customer per trust (the `stripeCustomerId` field is
   reserved), an Invoice with the per-pupil and MAT lines, and paid-status
   reconciliation via webhook.
+
+### Slice 6 note — proactive notifications: email now, push next
+
+The dashboard's Alerts inbox already lists every level 3/4 concern; slice 6 adds
+the **push**: the moment the rules engine raises a serious signal, the worker
+alerts the school's active DSLs by email, so a serious concern reaches them
+without anyone checking a screen. It runs right after each rules run (post-sync
+and the nightly sweep), is **idempotent** (one alert per DSL per signal, so a
+re-run never re-alerts), **sealed** (the email carries the sealed pupil ref and
+a link to the case — never a name; reveal stays gated and audited inside the
+case), and every send is recorded as a `Notification` and audited. The worker
+gained a narrowly-scoped SES send role (eu-west-2) and the email/APP_URL config
+to build the deep link.
+
+Follow-ons: a **push channel** (the `NotificationChannel` enum reserves `PUSH`)
+for mobile/browser alerts, and per-user notification preferences (quiet hours,
+digest vs immediate) — neither blocks the definition of done.
 
 This document is living: update the table and the slice sections as each lands.
