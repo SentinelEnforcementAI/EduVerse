@@ -252,3 +252,34 @@ describe("case_messages RLS (append-only, tenant-isolated)", () => {
     expect(still.map((m) => m.subject)).toEqual([`A-${run}`]);
   });
 });
+
+// Billing (slice 5) is trust-level commercial data, reached only through the
+// system context. A school tenant must never see it — proven here.
+describe("billing RLS (system context only)", () => {
+  it("a school tenant cannot read billing; the system context can", async () => {
+    const trust = await systemDb.trust.create({
+      data: { name: `Bill Trust ${run}`, slug: `bill-${run}` },
+    });
+    try {
+      await systemDb.billingAccount.create({ data: { trustId: trust.id } });
+
+      // The system context sees it.
+      const system = await systemDb.billingAccount.findMany({
+        where: { trustId: trust.id },
+      });
+      expect(system).toHaveLength(1);
+
+      // A school tenant context sees nothing — and cannot insert either.
+      const tenantView = await dbForTenant(tenantAId).billingAccount.findMany();
+      expect(tenantView).toHaveLength(0);
+      await expect(
+        dbForTenant(tenantAId).billingAccount.create({
+          data: { trustId: trust.id },
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await systemDb.billingAccount.deleteMany({ where: { trustId: trust.id } });
+      await systemDb.trust.deleteMany({ where: { id: trust.id } });
+    }
+  });
+});

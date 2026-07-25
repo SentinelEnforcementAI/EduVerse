@@ -262,6 +262,60 @@ model CaseMessage {
   @@map("case_messages")
 }
 
+// Commercial billing for a Multi-Academy Trust (commercialisation slice 5).
+// One account per trust; pricing is cost-per-pupil plus a flat fee per MAT.
+// Billing is trust-level, not pupil data — it is reached only by a trust
+// administrator through the system context, never by a school tenant, and its
+// row-level-security policy enforces exactly that. Money is stored as integer
+// pence to avoid floating-point drift.
+//
+// CTO-DECISION: the per-pupil rate is the commercial figure to confirm (the
+// default here is provisional); the MAT fee is the agreed £50,000/year. Real
+// Stripe wiring (customer + invoice objects) is stubbed behind an interface —
+// the stripe_* ids are reserved for it.
+model BillingAccount {
+  id                   String   @id @default(cuid())
+  trustId              String   @unique @map("trust_id")
+  perPupilPencePerYear Int      @default(500) @map("per_pupil_pence_per_year")
+  matFeePence          Int      @default(5000000) @map("mat_fee_pence")
+  currency             String   @default("GBP")
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("billing_accounts")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  VOID
+}
+
+// A metered billing period for a trust: the pupil count and the pricing that
+// applied, with the computed lines frozen at snapshot time so a later price or
+// roll change never rewrites history. The invoice lifecycle (draft → issued →
+// paid) lives here; the amounts do not change once set.
+model BillingSnapshot {
+  id              String        @id @default(cuid())
+  trustId         String        @map("trust_id")
+  periodStart     DateTime      @map("period_start")
+  periodEnd       DateTime      @map("period_end")
+  pupilCount      Int           @map("pupil_count")
+  perPupilPence   Int           @map("per_pupil_pence")
+  matFeePence     Int           @map("mat_fee_pence")
+  usagePence      Int           @map("usage_pence")
+  totalPence      Int           @map("total_pence")
+  currency        String
+  invoiceStatus   InvoiceStatus @default(DRAFT) @map("invoice_status")
+  stripeInvoiceId String?       @map("stripe_invoice_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([trustId, periodStart])
+  @@map("billing_snapshots")
+}
+
 enum DocumentScope {
   ORG
   CASE
