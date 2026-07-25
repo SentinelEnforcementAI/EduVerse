@@ -5,7 +5,7 @@ import {
 } from "../helpers";
 import type { RuleDefinition, RuleResult } from "../types";
 
-const params = {
+const defaults = {
   recentDays: 28,
   baselineDays: 84,
   behaviourRecentDays: 30,
@@ -24,8 +24,8 @@ export const crossDomain: RuleDefinition = {
   name: "Cross-domain correlation",
   description:
     "Moderate deterioration in at least two of attendance, behaviour, and attainment at the same time.",
-  params,
-  async evaluate(ctx): Promise<RuleResult[]> {
+  params: defaults,
+  async evaluate(ctx, params = defaults): Promise<RuleResult[]> {
     const windowEnd = ctx.asOf;
     const recentStart = daysBefore(windowEnd, params.recentDays);
     const baselineStart = daysBefore(recentStart, params.baselineDays);

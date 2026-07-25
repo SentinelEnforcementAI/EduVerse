@@ -1,7 +1,7 @@
 import { daysBefore, isoDate, WEEKDAY_NAMES } from "../helpers";
 import type { RuleDefinition, RuleResult } from "../types";
 
-const params = {
+const defaults = {
   windowDays: 84,
   minWeekdayAbsenceRatePct: 50,
   minWeekdayOccurrences: 8,
@@ -17,8 +17,8 @@ export const sustainedAbsence: RuleDefinition = {
   name: "Sustained absence pattern",
   description:
     "One weekday is habitually missed over the last twelve weeks while attendance on other weekdays remains normal.",
-  params,
-  async evaluate(ctx): Promise<RuleResult[]> {
+  params: defaults,
+  async evaluate(ctx, params = defaults): Promise<RuleResult[]> {
     const windowEnd = ctx.asOf;
     const windowStart = daysBefore(windowEnd, params.windowDays);
 

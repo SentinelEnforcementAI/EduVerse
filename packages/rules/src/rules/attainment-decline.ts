@@ -1,6 +1,6 @@
 import type { RuleDefinition, RuleResult } from "../types";
 
-const params = {
+const defaults = {
   minDeclinePoints: 8,
   minSubjectsDeclining: 2,
 };
@@ -15,8 +15,8 @@ export const attainmentDecline: RuleDefinition = {
   name: "Attainment decline",
   description:
     "Assessment scores have fallen materially in at least two subjects between the earliest and latest assessments on record.",
-  params,
-  async evaluate(ctx): Promise<RuleResult[]> {
+  params: defaults,
+  async evaluate(ctx, params = defaults): Promise<RuleResult[]> {
     const records = await ctx.db.attainmentRecord.findMany({
       select: { pupilId: true, subject: true, assessedAt: true, score: true },
       orderBy: { assessedAt: "asc" },
