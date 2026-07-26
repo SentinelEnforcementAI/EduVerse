@@ -50,9 +50,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await systemDb.caseMessage.deleteMany({
-    where: { tenantId: { in: [tenantAId, tenantBId] } },
-  });
+  const tenantIds = { in: [tenantAId, tenantBId] };
+  await systemDb.caseMessage.deleteMany({ where: { tenantId: tenantIds } });
+  await systemDb.notification.deleteMany({ where: { tenantId: tenantIds } });
+  await systemDb.intakeItem.deleteMany({ where: { tenantId: tenantIds } });
   await systemDb.session.deleteMany({ where: { tokenHash: `rls-test-${run}` } });
   await systemDb.user.deleteMany({
     where: { email: { in: [emailA, emailB, emailPlatform] } },
@@ -250,6 +251,119 @@ describe("case_messages RLS (append-only, tenant-isolated)", () => {
 
     const still = await dbForTenant(tenantAId).caseMessage.findMany();
     expect(still.map((m) => m.subject)).toEqual([`A-${run}`]);
+  });
+});
+
+// Intake (email mission control, phase 2) is tenant-isolated inbound mail that
+// a DSL later assigns to a case, so unlike the append-only records it permits
+// in-tenant UPDATE. Isolation and the WITH CHECK on writes are proven here.
+describe("intake_items RLS (tenant-isolated, updatable in-tenant)", () => {
+  async function seedIntake(tenantId: string, subject: string) {
+    return dbForTenant(tenantId).intakeItem.create({
+      data: {
+        tenantId,
+        fromAddress: "teacher@school.test",
+        toAddress: "safeguarding@school.test",
+        subject,
+        body: "A concern.",
+        receivedAt: new Date(),
+      },
+    });
+  }
+
+  it("a tenant sees only its own intake items", async () => {
+    await seedIntake(tenantAId, `intake-A-${run}`);
+    await seedIntake(tenantBId, `intake-B-${run}`);
+    const aSeen = await dbForTenant(tenantAId).intakeItem.findMany();
+    expect(aSeen.map((i) => i.subject)).toEqual([`intake-A-${run}`]);
+    const bSeen = await dbForTenant(tenantBId).intakeItem.findMany();
+    expect(bSeen.map((i) => i.subject)).toEqual([`intake-B-${run}`]);
+  });
+
+  it("cannot be inserted into another tenant", async () => {
+    await expect(
+      dbForTenant(tenantAId).intakeItem.create({
+        data: {
+          tenantId: tenantBId,
+          fromAddress: "x@school.test",
+          toAddress: "y@school.test",
+          subject: "intruder",
+          body: "x",
+          receivedAt: new Date(),
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("in-tenant update works; cross-tenant update matches nothing", async () => {
+    const mine = await dbForTenant(tenantAId).intakeItem.updateMany({
+      where: { subject: `intake-A-${run}` },
+      data: { status: "DISMISSED" },
+    });
+    expect(mine.count).toBe(1);
+
+    const theirs = await dbForTenant(tenantAId).intakeItem.updateMany({
+      where: { subject: `intake-B-${run}` },
+      data: { status: "DISMISSED" },
+    });
+    expect(theirs.count).toBe(0);
+  });
+});
+
+// Notifications (slice 6: serious-signal alerts) are an append-only,
+// tenant-isolated record of what was sent to whom — proven at the database.
+describe("notifications RLS (append-only, tenant-isolated)", () => {
+  async function seedNotification(tenantId: string, signalId: string) {
+    return dbForTenant(tenantId).notification.create({
+      data: {
+        tenantId,
+        signalId,
+        pupilId: `pup-${run}`,
+        userId: `user-${run}`,
+        toAddress: "dsl@school.test",
+        subject: "A serious concern needs review",
+      },
+    });
+  }
+
+  it("a tenant sees only its own notifications", async () => {
+    await seedNotification(tenantAId, `nsig-A-${run}`);
+    await seedNotification(tenantBId, `nsig-B-${run}`);
+    const aSeen = await dbForTenant(tenantAId).notification.findMany();
+    expect(aSeen.map((n) => n.signalId)).toEqual([`nsig-A-${run}`]);
+    const bSeen = await dbForTenant(tenantBId).notification.findMany();
+    expect(bSeen.map((n) => n.signalId)).toEqual([`nsig-B-${run}`]);
+  });
+
+  it("cannot be inserted into another tenant", async () => {
+    await expect(
+      dbForTenant(tenantAId).notification.create({
+        data: {
+          tenantId: tenantBId,
+          signalId: `nsig-x-${run}`,
+          pupilId: `pup-${run}`,
+          userId: `user-${run}`,
+          toAddress: "x@school.test",
+          subject: "intruder",
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("is append-only: UPDATE and DELETE match no rows", async () => {
+    const updated = await dbForTenant(tenantAId).notification.updateMany({
+      where: { signalId: `nsig-A-${run}` },
+      data: { subject: "rewritten" },
+    });
+    expect(updated.count).toBe(0);
+    const deleted = await dbForTenant(tenantAId).notification.deleteMany({
+      where: { signalId: `nsig-A-${run}` },
+    });
+    expect(deleted.count).toBe(0);
+    const still = await dbForTenant(tenantAId).notification.findMany();
+    expect(still.map((n) => n.subject)).toEqual([
+      "A serious concern needs review",
+    ]);
   });
 });
 

@@ -61,9 +61,10 @@ describe("auth.requestMagicLink", () => {
   it("stores only a hash of the token and emails the raw link", async () => {
     const findUnique = vi.fn().mockResolvedValue(testUser);
     const create = vi.fn().mockResolvedValue({});
+    const count = vi.fn().mockResolvedValue(0);
     const db = {
       user: { findUnique },
-      magicLinkToken: { create },
+      magicLinkToken: { create, count },
     } as unknown as TRPCContext["db"];
     const consoleSpy = vi
       .spyOn(console, "info")

@@ -69,10 +69,12 @@ const listedSignal = {
   updatedAt: new Date("2026-07-20T09:00:00Z"),
   windowEnd: new Date("2026-07-21T00:00:00Z"),
   pupilId: "pupil_1",
+  // The DB row carries the name/UPN; the router must never pass them through.
   pupil: {
     id: "pupil_1",
     firstName: "Ada",
     lastName: "Lovelace",
+    upn: "SW-DOW-0001",
     yearGroup: 9,
     registrationGroup: "9A",
   },
@@ -95,9 +97,16 @@ describe("signals.list", () => {
     expect(result[0]).toMatchObject({
       id: "sig_1",
       severity: 3,
-      pupil: { firstName: "Ada" },
+      pupil: { ref: "Pupil 0001", yearGroup: 9 },
       rule: { key: "attendance-drop" },
     });
+    // Sealed: no name or UPN reaches this list surface.
+    expect(result[0].pupil).not.toHaveProperty("firstName");
+    expect(result[0].pupil).not.toHaveProperty("lastName");
+    const serialised = JSON.stringify(result[0]);
+    expect(serialised).not.toContain("Ada");
+    expect(serialised).not.toContain("Lovelace");
+    expect(serialised).not.toContain("SW-DOW-0001");
 
     expect(auditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -161,6 +170,15 @@ describe("signals.byId", () => {
     expect(result.id).toBe("sig_1");
     expect(result.decisions).toEqual([]);
     expect(result.narrative).toBeNull();
+
+    // Sealed by default: reference only, no name or UPN in the detail payload.
+    expect(result.pupil).toMatchObject({ ref: "Pupil 0001", yearGroup: 9 });
+    expect(result.pupil).not.toHaveProperty("firstName");
+    expect(result.pupil).not.toHaveProperty("upn");
+    const serialised = JSON.stringify(result);
+    expect(serialised).not.toContain("Ada");
+    expect(serialised).not.toContain("Lovelace");
+    expect(serialised).not.toContain("SW-DOW-0001");
 
     expect(auditCreate).toHaveBeenCalledWith(
       expect.objectContaining({

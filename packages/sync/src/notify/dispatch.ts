@@ -9,11 +9,15 @@ import { sendAlertEmail } from "./mailer";
 // re-run never re-alerts. Sealed: the alert references the pupil by sealed ref
 // and links to the case; it never carries a name. Every send is audited.
 
-// The sealed pupil reference — "Pupil " + the last four of the UPN. Mirrors the
-// web app's canonical sealPupilRef (server/identity); kept here so the worker
-// does not depend on the web app.
+// The sealed pupil reference — "Pupil " + the last four UPN digits. Mirrors the
+// web app's canonical sealPupilRef (server/identity) exactly, including the
+// digit-only extraction, so a worker-sent alert and the on-screen reference
+// read identically and the intake matcher's `Pupil ####` regex always matches.
+// Kept here so the worker does not depend on the web app.
 function sealPupilRef(upn: string): string {
-  return `Pupil ${upn.slice(-4)}`;
+  const digits = upn.replace(/\D/g, "");
+  const tail = digits.slice(-4) || digits || "0000";
+  return `Pupil ${tail}`;
 }
 
 function senderAddress(): string {
