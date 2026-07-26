@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, tenantProcedure } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
+import { sealPupilRef } from "@/server/identity";
 import { generateNarrative } from "@/server/narrative/generate";
 import { getNarrativeModel } from "@/server/narrative/model-provider";
 import { decideSignal } from "@/server/signals/decide";
@@ -34,8 +35,7 @@ export const signalsRouter = createTRPCRouter({
           pupil: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
+              upn: true,
               yearGroup: true,
               registrationGroup: true,
             },
@@ -54,6 +54,8 @@ export const signalsRouter = createTRPCRouter({
         metadata: { status, count: signals.length },
       });
 
+      // A list surface: sealed reference only — never a name. Reveal is a
+      // deliberate, audited action on a single case (see casework.reveal).
       return signals.map((signal) => ({
         id: signal.id,
         status: signal.status,
@@ -61,7 +63,12 @@ export const signalsRouter = createTRPCRouter({
         title: signal.title,
         updatedAt: signal.updatedAt,
         windowEnd: signal.windowEnd,
-        pupil: signal.pupil,
+        pupil: {
+          id: signal.pupil.id,
+          ref: sealPupilRef(signal.pupil.upn),
+          yearGroup: signal.pupil.yearGroup,
+          registrationGroup: signal.pupil.registrationGroup,
+        },
         rule: signal.ruleVersion,
       }));
     }),
@@ -77,8 +84,6 @@ export const signalsRouter = createTRPCRouter({
           pupil: {
             select: {
               id: true,
-              firstName: true,
-              lastName: true,
               upn: true,
               yearGroup: true,
               registrationGroup: true,
@@ -118,8 +123,17 @@ export const signalsRouter = createTRPCRouter({
         orderBy: { createdAt: "desc" },
       });
 
+      // Sealed by default: the detail carries a sealed reference, never a name
+      // or UPN. Name reveal lives on the gated, audited casework.reveal path.
+      const { pupil, ...signalRest } = signal;
       return {
-        ...signal,
+        ...signalRest,
+        pupil: {
+          id: pupil.id,
+          ref: sealPupilRef(pupil.upn),
+          yearGroup: pupil.yearGroup,
+          registrationGroup: pupil.registrationGroup,
+        },
         narrative: narrative
           ? {
               id: narrative.id,

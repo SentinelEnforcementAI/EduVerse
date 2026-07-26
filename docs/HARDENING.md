@@ -71,6 +71,49 @@ customer with real pupil data.
    and fix findings. A follow-on is nonce-based CSP (removing `'unsafe-inline'`
    from `script-src`), which pairs with the accessibility/security pass.
 
+## Assurance review
+
+A whole-codebase assurance pass ran three independent audits — a sealed-identity
+leak sweep, a RLS / tenant-isolation audit, and a security review (auth,
+secrets, injection, audit integrity, human-in-the-loop). Verdict: tenant
+isolation is airtight at the database (every table `FORCE` RLS + policy, no
+`USING(true)`, no unfiltered cross-tenant query), no critical/high security
+vulnerabilities, audit is genuinely append-only, and nothing auto-actions a
+child. Sealed identity holds on every UI surface and the LLM path.
+
+**Fixed in the assurance-hardening slice (all tested):**
+
+- **Sealed the superseded `signals.list` / `signals.byId`** — the legacy router
+  (unused by the UI, still mounted) returned raw pupil names/UPN; it now returns
+  a sealed reference only, with a regression test that fails if a name or UPN
+  ever reaches those payloads again.
+- **Rate-limited the public magic-link request** (per-account window) so it
+  can't be used to flood a DSL's inbox or drive SES cost.
+- **Made magic-link consumption race-safe** (guarded single-use write).
+- **Aligned the worker's sealed-reference helper** with the canonical one.
+- **Added DB-level RLS isolation tests** for the newer tables (`intake_items`,
+  `notifications`) so a weakened policy fails CI.
+
+**Deferred to CTO / DPA gate (judgement calls, not defects):**
+
+1. **Repository search vs a once-revealed name.** Cross-repository document
+   search can surface a name that already entered the record via an audited
+   reveal, to a colleague who has not revealed that case. Decide the policy
+   (strict per-case sealing vs "revealed to the school") and implement to match.
+2. **`trust_id` predicate on trust-level tables' RLS.** `billing_accounts`,
+   `billing_snapshots` and `rule_configs` enforce only `app.is_system()`;
+   cross-trust isolation currently rests on the application filter (correct
+   everywhere today). Add an `app.trust_id()` context + predicate for
+   defence-in-depth (the deferred `CTO-DECISION`).
+3. **Session policy for shared school devices.** 7-day TTL, no idle timeout;
+   force the cookie `Secure` flag in production independent of `APP_URL`.
+4. **Rate-limit residuals.** Add per-IP limiting (Redis is in the stack) and
+   equalise request latency across known/unknown accounts to fully close the
+   timing side-channel.
+5. **Coverage tooling.** Rules 90% / sync 74% / db 65% / web 39% (web is low
+   only because it counts UI components; the server logic is the tested part).
+   Wire a coverage reporter + threshold if a hard gate is wanted.
+
 ## Definition of done
 
 Slices 1–8 are complete in code and Terraform. The nine items above are the
