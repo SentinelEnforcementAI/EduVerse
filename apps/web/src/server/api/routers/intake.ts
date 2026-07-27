@@ -47,8 +47,17 @@ export const intakeRouter = createTRPCRouter({
         where: { status: "OPEN" },
         orderBy: { createdAt: "desc" },
         take: 200,
-        select: { id: true, title: true, pupil: { select: { upn: true } } },
+        select: { id: true, title: true, pupilId: true },
       });
+      // Resolve pupils separately under the same RLS context and skip any
+      // signal whose pupil is unreadable here — a required relation included
+      // inline would make Prisma throw the whole query for one odd (e.g.
+      // cross-tenant) row.
+      const pupils = await db.pupil.findMany({
+        where: { id: { in: [...new Set(openSignals.map((s) => s.pupilId))] } },
+        select: { id: true, upn: true },
+      });
+      const pupilById = new Map(pupils.map((p) => [p.id, p]));
       return {
         items: items.map((i) => ({
           id: i.id,
@@ -57,11 +66,17 @@ export const intakeRouter = createTRPCRouter({
           body: i.body,
           receivedAt: i.receivedAt,
         })),
-        cases: openSignals.map((s) => ({
-          signalId: s.id,
-          ref: sealPupilRef(s.pupil.upn),
-          title: s.title,
-        })),
+        cases: openSignals.flatMap((s) => {
+          const pupil = pupilById.get(s.pupilId);
+          if (!pupil) return [];
+          return [
+            {
+              signalId: s.id,
+              ref: sealPupilRef(pupil.upn),
+              title: s.title,
+            },
+          ];
+        }),
       };
     }),
 

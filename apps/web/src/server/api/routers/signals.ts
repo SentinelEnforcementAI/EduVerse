@@ -31,15 +31,14 @@ export const signalsRouter = createTRPCRouter({
       const status = input?.status ?? "OPEN";
       const signals = await ctx.tenantDb.signal.findMany({
         where: { status },
-        include: {
-          pupil: {
-            select: {
-              id: true,
-              upn: true,
-              yearGroup: true,
-              registrationGroup: true,
-            },
-          },
+        select: {
+          id: true,
+          status: true,
+          severity: true,
+          title: true,
+          updatedAt: true,
+          windowEnd: true,
+          pupilId: true,
           ruleVersion: { select: { key: true, name: true, version: true } },
         },
         orderBy: [{ severity: "desc" }, { updatedAt: "desc" }],
@@ -54,23 +53,39 @@ export const signalsRouter = createTRPCRouter({
         metadata: { status, count: signals.length },
       });
 
+      // Resolve pupils separately under the same RLS context and skip any
+      // signal whose pupil is unreadable here — a required relation included
+      // inline would make Prisma throw the whole query for one odd (e.g.
+      // cross-tenant) row and take down the list.
+      const pupils = await ctx.tenantDb.pupil.findMany({
+        where: { id: { in: [...new Set(signals.map((s) => s.pupilId))] } },
+        select: { id: true, upn: true, yearGroup: true, registrationGroup: true },
+      });
+      const byId = new Map(pupils.map((p) => [p.id, p]));
+
       // A list surface: sealed reference only — never a name. Reveal is a
       // deliberate, audited action on a single case (see casework.reveal).
-      return signals.map((signal) => ({
-        id: signal.id,
-        status: signal.status,
-        severity: signal.severity,
-        title: signal.title,
-        updatedAt: signal.updatedAt,
-        windowEnd: signal.windowEnd,
-        pupil: {
-          id: signal.pupil.id,
-          ref: sealPupilRef(signal.pupil.upn),
-          yearGroup: signal.pupil.yearGroup,
-          registrationGroup: signal.pupil.registrationGroup,
-        },
-        rule: signal.ruleVersion,
-      }));
+      return signals.flatMap((signal) => {
+        const pupil = byId.get(signal.pupilId);
+        if (!pupil) return [];
+        return [
+          {
+            id: signal.id,
+            status: signal.status,
+            severity: signal.severity,
+            title: signal.title,
+            updatedAt: signal.updatedAt,
+            windowEnd: signal.windowEnd,
+            pupil: {
+              id: pupil.id,
+              ref: sealPupilRef(pupil.upn),
+              yearGroup: pupil.yearGroup,
+              registrationGroup: pupil.registrationGroup,
+            },
+            rule: signal.ruleVersion,
+          },
+        ];
+      });
     }),
 
   // Full signal detail: the pupil, the exact rule version that fired, and
@@ -81,19 +96,27 @@ export const signalsRouter = createTRPCRouter({
       const signal = await ctx.tenantDb.signal.findUnique({
         where: { id: input.id },
         include: {
-          pupil: {
-            select: {
-              id: true,
-              upn: true,
-              yearGroup: true,
-              registrationGroup: true,
-            },
-          },
           ruleVersion: true,
           execution: { select: { id: true, startedAt: true, asOf: true } },
         },
       });
       if (!signal) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      // Resolve the pupil separately under the same RLS context: a required
+      // relation included inline throws the whole query if this signal's pupil
+      // is unreadable here (e.g. a cross-tenant leftover), 500-ing the record.
+      const pupil = await ctx.tenantDb.pupil.findUnique({
+        where: { id: signal.pupilId },
+        select: {
+          id: true,
+          upn: true,
+          yearGroup: true,
+          registrationGroup: true,
+        },
+      });
+      if (!pupil) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
@@ -125,9 +148,8 @@ export const signalsRouter = createTRPCRouter({
 
       // Sealed by default: the detail carries a sealed reference, never a name
       // or UPN. Name reveal lives on the gated, audited casework.reveal path.
-      const { pupil, ...signalRest } = signal;
       return {
-        ...signalRest,
+        ...signal,
         pupil: {
           id: pupil.id,
           ref: sealPupilRef(pupil.upn),
