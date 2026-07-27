@@ -1,0 +1,60 @@
+# Read recent web-service logs from CloudWatch. A diagnostics helper for when a
+# production route is erroring and the stack trace lives in the container log.
+# Manual dispatch only; read-only (it never changes infrastructure).
+name: Diagnose logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: How many minutes back to read
+        required: false
+        default: "60"
+      filter:
+        description: CloudWatch filter pattern (blank = all lines)
+        required: false
+        default: ""
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  logs:
+    name: Tail web logs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Filter web log group for recent events
+        env:
+          MINUTES: ${{ inputs.minutes }}
+          FILTER: ${{ inputs.filter }}
+        run: |
+          GROUP="/ecs/$PROJECT/web"
+          START=$(( ($(date +%s) - MINUTES * 60) * 1000 ))
+          echo "Log group: $GROUP"
+          echo "Since: ${MINUTES}m ago (start=$START), filter='${FILTER}'"
+          echo "================================================================"
+          if [ -n "$FILTER" ]; then
+            aws logs filter-log-events \
+              --log-group-name "$GROUP" \
+              --start-time "$START" \
+              --filter-pattern "$FILTER" \
+              --query 'events[].message' --output text | tr '\t' '\n'
+          else
+            aws logs filter-log-events \
+              --log-group-name "$GROUP" \
+              --start-time "$START" \
+              --query 'events[].message' --output text | tr '\t' '\n'
+          fi
+          echo "================================================================"
+          echo "Done."
