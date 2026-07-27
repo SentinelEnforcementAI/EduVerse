@@ -9,7 +9,7 @@ export function ShellFooter() {
       <div className="mx-auto flex w-full max-w-[1280px] items-center gap-2.5 px-6 py-6 text-xs text-muted-foreground">
         <ShieldCheck className="size-4 text-cobalt" aria-hidden />
         <span>
-          KCSIE 2024 aligned&nbsp;&nbsp;·&nbsp;&nbsp;UK GDPR&nbsp;&nbsp;·&nbsp;&nbsp;Data
+          KCSIE 2026 aligned&nbsp;&nbsp;·&nbsp;&nbsp;UK GDPR&nbsp;&nbsp;·&nbsp;&nbsp;Data
           residency: UK
         </span>
       </div>

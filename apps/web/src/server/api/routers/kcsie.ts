@@ -159,7 +159,7 @@ OVERALL STATUS: ${STATUS_LABEL[overall]}
 COMPONENTS
 ${lines}
 
-This pack summarises the school's safeguarding compliance against KCSIE 2024. Each component is derived from the school's records held in the repository.`;
+This pack summarises the school's safeguarding compliance against KCSIE 2026. Each component is derived from the school's records held in the repository.`;
 
       const doc = await db.document.create({
         data: {

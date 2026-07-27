@@ -82,7 +82,7 @@ export function deriveComponents(
       key: "policy",
       label: "Safeguarding policy annual review",
       status,
-      detail: `Reviewed ${ukDate(policy.docDate)}, aligned to KCSIE 2024`,
+      detail: `Reviewed ${ukDate(policy.docDate)}, aligned to KCSIE 2026`,
       due: `Next due ${ukDate(nextDue)}`,
     });
   } else {
