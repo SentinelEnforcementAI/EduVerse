@@ -1,0 +1,80 @@
+# Reset the demo to its pristine state. Re-runs the synthetic demo seed against
+# the live database as a one-off ECS task: it wipes the synthetic pupil data and
+# regenerates it, so every reveal, decision, note, message and referral made
+# during a demo is cleared and the hero cases are sealed again.
+#
+# Data-only: it never rebuilds images or changes infrastructure, and it only
+# ever touches the synthetic demo trust. To run it you must type RESET in the
+# confirm box, so it can't be triggered by an accidental click.
+#
+# Note: pupil and case IDs are regenerated, so any bookmarked case URL will
+# move. Drive the demo from the Trust overview and it is a non-issue.
+name: Reset demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type RESET to confirm you want to wipe and reseed the demo
+        required: true
+        default: ""
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  reset:
+    name: Reseed the demo trust
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "RESET" ]; then
+            echo "Confirmation not given (type RESET). Nothing was changed."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Reseed the demo (one-off task, owner role)
+        run: |
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=$PROJECT-private-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=$PROJECT-worker-*" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          OVERRIDES='{"containerOverrides":[{"name":"migrate","command":["pnpm","--filter","@sentinel/db","db:seed:demo:prod"]}]}'
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$PROJECT" \
+            --task-definition "$PROJECT-migrate" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --overrides "$OVERRIDES" \
+            --query 'tasks[0].taskArn' --output text)
+
+          echo "Reset task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Reseed failed (exit $EXIT_CODE) — check /ecs/$PROJECT/worker logs (migrate prefix)"
+            exit 1
+          fi
+          echo "Demo reset to pristine state."
