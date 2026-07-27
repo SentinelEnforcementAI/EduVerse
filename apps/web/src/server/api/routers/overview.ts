@@ -114,21 +114,51 @@ async function schoolMetrics(db: TenantDb) {
 // pupil never appears by name here, only as a stable sealed reference. The
 // numeric severity is deliberately NOT returned: no risk score on a child
 // (principle 4). The escalation-level treatment lands with the case-view slice.
+// Resolve pupils for a set of signals under the current RLS context, keyed by
+// id. A signal's pupil is a required relation, so including it inline makes
+// Prisma throw the whole query if one row's pupil is unreadable here (e.g. a
+// cross-tenant leftover). Loading pupils separately and skipping the misses
+// keeps a page of children's signals up when a single row is odd.
+async function pupilsForSignals(db: TenantDb, pupilIds: string[]) {
+  const pupils = await db.pupil.findMany({
+    where: { id: { in: [...new Set(pupilIds)] } },
+    select: { id: true, upn: true, yearGroup: true },
+  });
+  return new Map(pupils.map((p) => [p.id, p]));
+}
+
 async function schoolPatterns(db: TenantDb) {
   const signals = await db.signal.findMany({
     where: { status: "OPEN" },
-    include: { pupil: { select: { upn: true, yearGroup: true } } },
+    select: {
+      id: true,
+      title: true,
+      severity: true,
+      serious: true,
+      windowEnd: true,
+      pupilId: true,
+    },
     orderBy: [{ serious: "desc" }, { severity: "desc" }, { updatedAt: "desc" }],
     take: 6,
   });
-  return signals.map((signal) => ({
-    id: signal.id,
-    ref: sealPupilRef(signal.pupil.upn),
-    yearGroup: signal.pupil.yearGroup,
-    headline: signal.title,
-    level: escalationLevel(signal.severity, signal.serious),
-    windowEnd: signal.windowEnd,
-  }));
+  const byId = await pupilsForSignals(
+    db,
+    signals.map((s) => s.pupilId),
+  );
+  return signals.flatMap((signal) => {
+    const pupil = byId.get(signal.pupilId);
+    if (!pupil) return [];
+    return [
+      {
+        id: signal.id,
+        ref: sealPupilRef(pupil.upn),
+        yearGroup: pupil.yearGroup,
+        headline: signal.title,
+        level: escalationLevel(signal.severity, signal.serious),
+        windowEnd: signal.windowEnd,
+      },
+    ];
+  });
 }
 
 export const overviewRouter = createTRPCRouter({
@@ -178,20 +208,37 @@ export const overviewRouter = createTRPCRouter({
             status: { in: ["OPEN", "CONFIRMED", "ESCALATED"] },
             OR: [{ severity: { gte: 3 } }, { serious: true }],
           },
-          include: { pupil: { select: { upn: true, yearGroup: true } } },
+          select: {
+            id: true,
+            title: true,
+            severity: true,
+            serious: true,
+            windowEnd: true,
+            pupilId: true,
+          },
           orderBy: [{ serious: "desc" }, { severity: "desc" }, { updatedAt: "desc" }],
           take: 50,
         });
-        return signals.map((sig) => ({
-          id: sig.id,
-          schoolId: s.id,
-          schoolName: s.name,
-          ref: sealPupilRef(sig.pupil.upn),
-          yearGroup: sig.pupil.yearGroup,
-          headline: sig.title,
-          level: escalationLevel(sig.severity, sig.serious),
-          windowEnd: sig.windowEnd,
-        }));
+        const byId = await pupilsForSignals(
+          db,
+          signals.map((sig) => sig.pupilId),
+        );
+        return signals.flatMap((sig) => {
+          const pupil = byId.get(sig.pupilId);
+          if (!pupil) return [];
+          return [
+            {
+              id: sig.id,
+              schoolId: s.id,
+              schoolName: s.name,
+              ref: sealPupilRef(pupil.upn),
+              yearGroup: pupil.yearGroup,
+              headline: sig.title,
+              level: escalationLevel(sig.severity, sig.serious),
+              windowEnd: sig.windowEnd,
+            },
+          ];
+        });
       }),
     );
     const alerts = rows

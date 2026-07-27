@@ -159,6 +159,56 @@ describe("cohort.patterns", () => {
   });
 });
 
+describe("cohort.patterns resilience", () => {
+  // Regression for the production fault (digest 1704990025): a signal whose
+  // pupil is unreadable under its school's RLS context (a cross-tenant
+  // leftover). The pupil relation is required, so a naive include throws the
+  // whole query and 500s the trust view. cohort.patterns must skip the one bad
+  // row and still return the real cross-school patterns.
+  it("skips a signal whose pupil is unreadable instead of throwing", async () => {
+    // A pupil that lives in school B, referenced by a signal in school A: under
+    // school A's RLS the pupil is invisible, so the relation resolves to null.
+    const foreignPupil = await systemDb.pupil.create({
+      data: {
+        tenantId: schoolBId,
+        upn: `ORPHAN-${run}`,
+        firstName: "Real",
+        lastName: "Name",
+        yearGroup: 9,
+        registrationGroup: "9A",
+        dateOfBirth: new Date(Date.UTC(2011, 0, 1)),
+      },
+    });
+    const execution = await systemDb.ruleExecution.create({
+      data: { tenantId: schoolAId, status: "SUCCEEDED", asOf: new Date() },
+    });
+    const orphan = await systemDb.signal.create({
+      data: {
+        tenantId: schoolAId,
+        pupilId: foreignPupil.id,
+        ruleVersionId,
+        executionId: execution.id,
+        severity: 2,
+        title: "Behaviour spike",
+        reasoning: { summary: "fixture", metrics: {}, dataPoints: [] },
+        windowStart: new Date(Date.UTC(2026, 3, 14)),
+        windowEnd: new Date(Date.UTC(2026, 3, 28)),
+      },
+    });
+
+    try {
+      const caller = createCaller(await contextFor(director));
+      const { patterns } = await caller.cohort.patterns();
+      // Did not throw, and the genuine cross-school pattern is still present.
+      expect(patterns.find((p) => p.key === "9-behaviour")).toBeDefined();
+    } finally {
+      await systemDb.signal.delete({ where: { id: orphan.id } });
+      await systemDb.ruleExecution.delete({ where: { id: execution.id } });
+      await systemDb.pupil.delete({ where: { id: foreignPupil.id } });
+    }
+  });
+});
+
 describe("cohort.detail", () => {
   it("returns a by-school breakdown and a recommendation for a director", async () => {
     const caller = createCaller(await contextFor(director));
