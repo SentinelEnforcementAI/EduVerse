@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { resolveTenancy } from "@sentinel/db";
+import { resolveTenancy, systemDb } from "@sentinel/db";
 
 import { getAuthSession } from "@/server/auth/session";
 import { serverApi } from "@/trpc/server";
@@ -197,6 +197,20 @@ export default async function DashboardLayout({
 
   const displayName = session.user.name ?? session.user.email;
 
+  // A director / trust admin can switch between the whole-trust (MAT) view and
+  // any single school; a DSL has just their own school (no switch shown).
+  const trust =
+    isDirector && tenancy.trustId
+      ? await systemDb.trust.findUnique({
+          where: { id: tenancy.trustId },
+          select: { name: true },
+        })
+      : null;
+  const workspaceSchools = tenancy.schools.map((s) => ({
+    id: s.id,
+    name: s.name,
+  }));
+
   return (
     <div className="flex min-h-screen">
       <Sidebar
@@ -204,6 +218,8 @@ export default async function DashboardLayout({
         quickActions={quickActions}
         name={displayName}
         roleLabel={roleLabel}
+        trustName={trust?.name ?? null}
+        schools={workspaceSchools}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar showSwitch={isDirector} alertsCount={counts.alerts} />

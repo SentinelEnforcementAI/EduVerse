@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ChevronDown, HelpCircle, type LucideIcon } from "lucide-react";
+import { HelpCircle, type LucideIcon } from "lucide-react";
 
 import { BrandLockup } from "@/components/brand";
 
 import { NavLink } from "./nav-link";
+import { ProfileMenu, type Workspace } from "./profile-menu";
 
 export type NavItem = {
   href: string;
@@ -25,11 +26,17 @@ export function Sidebar({
   quickActions,
   name,
   roleLabel,
+  trustName,
+  schools,
 }: {
   nav: NavItem[];
   quickActions: QuickAction[];
   name: string;
   roleLabel: string;
+  // Trust name + schools drive the workspace switch in the profile menu.
+  // trustName is null for a single-school DSL (no switch shown).
+  trustName: string | null;
+  schools: Workspace[];
 }) {
   const initials =
     name
@@ -104,31 +111,13 @@ export function Sidebar({
         </Link>
       </nav>
 
-      <div className="border-t border-cloud p-3">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <span
-            aria-hidden
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-cobalt-tint text-sm font-semibold text-cobalt"
-          >
-            {initials}
-          </span>
-          <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-sm font-medium">{name}</div>
-            <div className="truncate text-xs text-muted-foreground">
-              {roleLabel}
-            </div>
-          </div>
-          <form action="/api/auth/sign-out" method="post" className="shrink-0">
-            <button
-              type="submit"
-              aria-label="Sign out"
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-paper hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronDown className="size-4" aria-hidden />
-            </button>
-          </form>
-        </div>
-      </div>
+      <ProfileMenu
+        name={name}
+        roleLabel={roleLabel}
+        initials={initials}
+        trustName={trustName}
+        schools={schools}
+      />
     </aside>
   );
 }

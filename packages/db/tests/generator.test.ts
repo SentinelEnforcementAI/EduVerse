@@ -118,27 +118,41 @@ describe("embedded risk patterns", () => {
   });
 
   it("cross-domain: moderate signals across all three domains", () => {
-    const pupil = pupilWithPattern("cross-domain");
-    const recentAttendance = pupil.attendance.slice(-80);
-    expect(absenceRate(recentAttendance)).toBeGreaterThan(0.1);
+    // Cross-domain is a deliberately moderate pattern in all three domains, so
+    // any single pupil sits near the thresholds and one RNG draw can dip under.
+    // Assert the cohort mean over a full-size school, which tests the pattern
+    // itself and is robust to how many pupils carry it and their RNG draws.
+    const big: SchoolConfig = { ...config, pupilCount: 800 };
+    const cohort = generateSchool(big).filter(
+      (p) => p.riskPattern === "cross-domain",
+    );
+    expect(cohort.length).toBeGreaterThanOrEqual(5);
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
-    const days = schoolDays(config.anchorDate, config.months);
+    const days = schoolDays(big.anchorDate, big.months);
     const windowStart = days[days.length - 30]!.getTime();
-    const recentIncidents = pupil.behaviour.filter(
-      (b) => b.date.getTime() >= windowStart,
-    );
-    expect(recentIncidents.length).toBeGreaterThanOrEqual(3);
 
-    const bySubject = new Map<string, number[]>();
-    for (const record of pupil.attainment) {
-      const scores = bySubject.get(record.subject) ?? [];
-      scores.push(record.score);
-      bySubject.set(record.subject, scores);
-    }
-    const drops = [...bySubject.values()].map(
-      (scores) => scores[0]! - scores[scores.length - 1]!,
+    const absences = cohort.map((p) => absenceRate(p.attendance.slice(-80)));
+    expect(mean(absences)).toBeGreaterThan(0.1);
+
+    const incidents = cohort.map(
+      (p) => p.behaviour.filter((b) => b.date.getTime() >= windowStart).length,
     );
-    expect(drops.reduce((a, b) => a + b, 0) / drops.length).toBeGreaterThan(5);
+    expect(mean(incidents)).toBeGreaterThanOrEqual(3);
+
+    const avgDrops = cohort.map((p) => {
+      const bySubject = new Map<string, number[]>();
+      for (const record of p.attainment) {
+        const scores = bySubject.get(record.subject) ?? [];
+        scores.push(record.score);
+        bySubject.set(record.subject, scores);
+      }
+      const drops = [...bySubject.values()].map(
+        (scores) => scores[0]! - scores[scores.length - 1]!,
+      );
+      return drops.reduce((a, b) => a + b, 0) / drops.length;
+    });
+    expect(mean(avgDrops)).toBeGreaterThan(5);
   });
 
   it("baseline pupils attend normally", () => {

@@ -60,12 +60,16 @@ export type SchoolConfig = {
 };
 
 // Proportions per school roll, matching the design brief (~800 pupils).
+// Roughly even across the five patterns so the active concerns show a genuine
+// mix rather than a wall of attendance flags — and the flagship cross-domain
+// "joins the dots" pattern is well-represented, not a rarity. (Was heavily
+// weighted to attendance-drop, which skewed every demo overview.)
 const PATTERN_RATES: [RiskPattern, number][] = [
-  ["attendance-drop", 15 / 800],
-  ["behaviour-spike", 10 / 800],
-  ["attainment-decline", 10 / 800],
-  ["cross-domain", 5 / 800],
-  ["sustained-absence", 8 / 800],
+  ["attendance-drop", 12 / 800],
+  ["behaviour-spike", 12 / 800],
+  ["attainment-decline", 11 / 800],
+  ["cross-domain", 10 / 800],
+  ["sustained-absence", 10 / 800],
 ];
 
 const FIRST_NAMES = [
