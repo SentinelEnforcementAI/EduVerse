@@ -102,21 +102,43 @@ async function triageRows(
 ) {
   const signals = await db.signal.findMany({
     where: { status: { in: TRIAGE_META[key].statuses } },
-    include: { pupil: { select: { upn: true, yearGroup: true } } },
+    select: {
+      id: true,
+      title: true,
+      severity: true,
+      serious: true,
+      status: true,
+      pupilId: true,
+    },
     orderBy: [{ severity: "desc" }, { updatedAt: "desc" }],
     take: 200,
   });
-  return signals.map((signal) => ({
-    id: signal.id,
-    schoolId: school.id,
-    schoolName: school.name,
-    ref: sealPupilRef(signal.pupil.upn),
-    yearGroup: signal.pupil.yearGroup,
-    headline: signal.title,
-    level: escalationLevel(signal.severity, signal.serious),
-    confidence: confidenceBand(signal.severity),
-    status: signal.status,
-  }));
+  // Resolve pupils separately under the same RLS context and skip any signal
+  // whose pupil is unreadable here — a required relation included inline would
+  // make Prisma throw the whole query for one odd (e.g. cross-tenant) row and
+  // take down the triage list.
+  const pupils = await db.pupil.findMany({
+    where: { id: { in: [...new Set(signals.map((s) => s.pupilId))] } },
+    select: { id: true, upn: true, yearGroup: true },
+  });
+  const byId = new Map(pupils.map((p) => [p.id, p]));
+  return signals.flatMap((signal) => {
+    const pupil = byId.get(signal.pupilId);
+    if (!pupil) return [];
+    return [
+      {
+        id: signal.id,
+        schoolId: school.id,
+        schoolName: school.name,
+        ref: sealPupilRef(pupil.upn),
+        yearGroup: pupil.yearGroup,
+        headline: signal.title,
+        level: escalationLevel(signal.severity, signal.serious),
+        confidence: confidenceBand(signal.severity),
+        status: signal.status,
+      },
+    ];
+  });
 }
 
 export const caseworkRouter = createTRPCRouter({
@@ -188,21 +210,29 @@ export const caseworkRouter = createTRPCRouter({
       const signal = await db.signal.findUnique({
         where: { id: input.signalId },
         include: {
-          // firstName / lastName are read but only ever RETURNED once the case
-          // is revealed (below) — never on a sealed case.
-          pupil: {
-            select: {
-              id: true,
-              upn: true,
-              yearGroup: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
           ruleVersion: { select: { key: true, name: true } },
         },
       });
       if (!signal) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      // firstName / lastName are read but only ever RETURNED once the case is
+      // revealed (below) — never on a sealed case. The pupil is resolved
+      // separately under the same RLS context: a required relation included
+      // inline throws the whole query if this signal's pupil is unreadable here
+      // (e.g. a cross-tenant leftover), 500-ing the case view.
+      const pupil = await db.pupil.findUnique({
+        where: { id: signal.pupilId },
+        select: {
+          id: true,
+          upn: true,
+          yearGroup: true,
+          firstName: true,
+          lastName: true,
+        },
+      });
+      if (!pupil) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
@@ -316,16 +346,16 @@ export const caseworkRouter = createTRPCRouter({
         signalId: signal.id,
         schoolId: school.id,
         schoolName: school.name,
-        ref: sealPupilRef(signal.pupil.upn),
+        ref: sealPupilRef(pupil.upn),
         // The name is present ONLY when the case has been revealed; otherwise
         // it never leaves the server.
         pupilName: revealed
-          ? `${signal.pupil.firstName} ${signal.pupil.lastName}`
+          ? `${pupil.firstName} ${pupil.lastName}`
           : null,
         revealed,
         revealable,
         revealReasons: REVEAL_REASONS,
-        yearGroup: signal.pupil.yearGroup,
+        yearGroup: pupil.yearGroup,
         headline: signal.title,
         status: signal.status,
         confidence: confidenceBand(signal.severity),
@@ -568,18 +598,24 @@ export const caseworkRouter = createTRPCRouter({
       const signal = await db.signal.findUnique({
         where: { id: input.signalId },
         include: {
-          pupil: {
-            select: {
-              upn: true,
-              yearGroup: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
           ruleVersion: { select: { key: true } },
         },
       });
       if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Resolve the pupil separately under the same RLS context: a required
+      // relation included inline throws the whole query if this signal's pupil
+      // is unreadable here (e.g. a cross-tenant leftover).
+      const pupil = await db.pupil.findUnique({
+        where: { id: signal.pupilId },
+        select: {
+          upn: true,
+          yearGroup: true,
+          firstName: true,
+          lastName: true,
+        },
+      });
+      if (!pupil) throw new TRPCError({ code: "NOT_FOUND" });
 
       const revealed = await db.auditEvent.findFirst({
         where: {
@@ -593,7 +629,7 @@ export const caseworkRouter = createTRPCRouter({
       const source = sourceForRule(signal.ruleVersion.key);
       const base = {
         schoolName: school.name,
-        yearGroup: signal.pupil.yearGroup,
+        yearGroup: pupil.yearGroup,
         window: `${ukDate(signal.windowStart)} to ${ukDate(signal.windowEnd)}`,
         dsl: ctx.session.user.name ?? "The Designated Safeguarding Lead",
         date: ukDate(new Date()),
@@ -605,11 +641,11 @@ export const caseworkRouter = createTRPCRouter({
         })),
         overall: reasoning.summary,
       };
-      const sealedRef = sealPupilRef(signal.pupil.upn);
+      const sealedRef = sealPupilRef(pupil.upn);
       const data: CaseDraftData = {
         ...base,
         pupilRef: revealed
-          ? `${signal.pupil.firstName} ${signal.pupil.lastName}`
+          ? `${pupil.firstName} ${pupil.lastName}`
           : sealedRef,
       };
       const sealedDraft = buildDraft(input.type, { ...base, pupilRef: sealedRef });

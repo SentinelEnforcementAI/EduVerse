@@ -63,9 +63,18 @@ export const messagesRouter = createTRPCRouter({
       );
       const signal = await db.signal.findUnique({
         where: { id: input.signalId },
-        include: { pupil: { select: { upn: true } } },
+        select: { id: true, pupilId: true },
       });
       if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Resolve the pupil separately under the same RLS context: a required
+      // relation included inline throws the whole query if this signal's pupil
+      // is unreadable here (e.g. a cross-tenant leftover).
+      const pupil = await db.pupil.findUnique({
+        where: { id: signal.pupilId },
+        select: { upn: true },
+      });
+      if (!pupil) throw new TRPCError({ code: "NOT_FOUND" });
 
       const messages = await db.caseMessage.findMany({
         where: { signalId: signal.id },
@@ -87,7 +96,7 @@ export const messagesRouter = createTRPCRouter({
       );
 
       return {
-        pupilRef: sealPupilRef(signal.pupil.upn),
+        pupilRef: sealPupilRef(pupil.upn),
         messages: messages.map((m) => ({
           id: m.id,
           direction: m.direction,

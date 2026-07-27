@@ -85,9 +85,20 @@ describe("signals.list", () => {
   it("returns open signals and audits the read", async () => {
     const findMany = vi.fn().mockResolvedValue([listedSignal]);
     const auditCreate = vi.fn().mockResolvedValue({});
+    // The pupil is resolved separately (a required relation included inline
+    // throws the whole query if one row's pupil is unreadable under RLS).
+    const pupilFindMany = vi.fn().mockResolvedValue([
+      {
+        id: "pupil_1",
+        upn: "SW-DOW-0001",
+        yearGroup: 9,
+        registrationGroup: "9A",
+      },
+    ]);
     const caller = createCaller(
       tenantContext({
         signal: { findMany },
+        pupil: { findMany: pupilFindMany },
         auditEvent: { create: auditCreate },
       }),
     );
@@ -156,9 +167,17 @@ describe("signals.byId", () => {
     };
     const findUnique = vi.fn().mockResolvedValue(detail);
     const auditCreate = vi.fn().mockResolvedValue({});
+    // Pupil resolved separately, as in the router (see signals.list note).
+    const pupilFindUnique = vi.fn().mockResolvedValue({
+      id: "pupil_1",
+      upn: "SW-DOW-0001",
+      yearGroup: 9,
+      registrationGroup: "9A",
+    });
     const caller = createCaller(
       tenantContext({
         signal: { findUnique },
+        pupil: { findUnique: pupilFindUnique },
         auditEvent: { create: auditCreate },
         signalDecision: { findMany: vi.fn().mockResolvedValue([]) },
         signalNarrative: { findFirst: vi.fn().mockResolvedValue(null) },

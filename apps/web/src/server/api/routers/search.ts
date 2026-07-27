@@ -46,7 +46,13 @@ export const searchRouter = createTRPCRouter({
           const { db } = dbForSchool(ctx.tenancy, s.id);
           const signals = await db.signal.findMany({
             where: { status: { in: ["OPEN", "CONFIRMED", "ESCALATED"] } },
-            include: { pupil: { select: { upn: true, yearGroup: true } } },
+            select: {
+              id: true,
+              title: true,
+              severity: true,
+              serious: true,
+              pupilId: true,
+            },
             orderBy: [
               { serious: "desc" },
               { severity: "desc" },
@@ -54,16 +60,31 @@ export const searchRouter = createTRPCRouter({
             ],
             take: 400,
           });
+          // Resolve pupils separately under the same RLS context and skip any
+          // signal whose pupil is unreadable here — a required relation included
+          // inline would make Prisma throw the whole query for one odd (e.g.
+          // cross-tenant) row.
+          const pupils = await db.pupil.findMany({
+            where: { id: { in: [...new Set(signals.map((sig) => sig.pupilId))] } },
+            select: { id: true, upn: true, yearGroup: true },
+          });
+          const byId = new Map(pupils.map((p) => [p.id, p]));
           return signals
-            .map((sig) => ({
-              id: sig.id,
-              schoolId: s.id,
-              schoolName: s.name,
-              ref: sealPupilRef(sig.pupil.upn),
-              yearGroup: sig.pupil.yearGroup,
-              headline: sig.title,
-              level: escalationLevel(sig.severity, sig.serious),
-            }))
+            .flatMap((sig) => {
+              const pupil = byId.get(sig.pupilId);
+              if (!pupil) return [];
+              return [
+                {
+                  id: sig.id,
+                  schoolId: s.id,
+                  schoolName: s.name,
+                  ref: sealPupilRef(pupil.upn),
+                  yearGroup: pupil.yearGroup,
+                  headline: sig.title,
+                  level: escalationLevel(sig.severity, sig.serious),
+                },
+              ];
+            })
             .filter(
               (r) =>
                 r.ref.toLowerCase().includes(q) ||
