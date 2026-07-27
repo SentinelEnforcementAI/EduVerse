@@ -5,6 +5,7 @@ import { BrandLockup } from "@/components/brand";
 
 import { NavLink } from "./nav-link";
 import { ProfileMenu, type Workspace } from "./profile-menu";
+import { SettingsNav, type SettingsItem } from "./settings-nav";
 
 export type NavItem = {
   href: string;
@@ -23,6 +24,7 @@ export type QuickAction = { href: string; label: string; icon: LucideIcon };
 // the one client piece, which derives active state from the current path.
 export function Sidebar({
   nav,
+  settings,
   quickActions,
   name,
   roleLabel,
@@ -30,6 +32,8 @@ export function Sidebar({
   schools,
 }: {
   nav: NavItem[];
+  // Administrative / configuration surfaces, grouped under a Settings entry.
+  settings: SettingsItem[];
   quickActions: QuickAction[];
   name: string;
   roleLabel: string;
@@ -101,6 +105,8 @@ export function Sidebar({
             })}
           </ul>
         </div>
+
+        {settings.length ? <SettingsNav items={settings} /> : null}
 
         <Link
           href="/dashboard/governance"

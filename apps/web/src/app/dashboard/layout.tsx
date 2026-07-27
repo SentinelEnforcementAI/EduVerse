@@ -90,17 +90,7 @@ export default async function DashboardLayout({
           icon: Bell,
           badge: counts.alerts,
         },
-        {
-          href: "/dashboard/governance",
-          label: "Governance",
-          icon: ShieldCheck,
-        },
         { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
-        {
-          href: "/dashboard/trust/inspection",
-          label: "Inspection",
-          icon: SearchCheck,
-        },
       ]
     : [
         {
@@ -134,37 +124,41 @@ export default async function DashboardLayout({
           badge: counts.alerts,
         },
         { href: `${schoolBase}/kcsie`, label: "KCSIE", icon: FileText },
-        {
+        { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
+      ];
+
+  // Configuration and assurance surfaces live behind a single Settings entry,
+  // not on the primary rail: governance and inspection for everyone, plus the
+  // trust-admin tools (onboarding, users, rules, billing) for an administrator.
+  const settings: NavItem[] = [
+    { href: "/dashboard/governance", label: "Governance", icon: ShieldCheck },
+    isDirector
+      ? {
+          href: "/dashboard/trust/inspection",
+          label: "Inspection",
+          icon: SearchCheck,
+        }
+      : {
           href: `${schoolBase}/inspection`,
           label: "Inspection",
           icon: SearchCheck,
         },
-        {
-          href: "/dashboard/governance",
-          label: "Governance",
-          icon: ShieldCheck,
-        },
-        { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
-      ];
-
-  // Trust administrators get the onboarding and user-management surfaces.
+  ];
   if (isAdmin) {
-    nav.push({
-      href: "/dashboard/admin/onboarding",
-      label: "Onboarding",
-      icon: Rocket,
-    });
-    nav.push({ href: "/dashboard/admin/users", label: "Users", icon: Users });
-    nav.push({
-      href: "/dashboard/admin/rules",
-      label: "Rules",
-      icon: SlidersHorizontal,
-    });
-    nav.push({
-      href: "/dashboard/admin/billing",
-      label: "Billing",
-      icon: CreditCard,
-    });
+    settings.push(
+      {
+        href: "/dashboard/admin/onboarding",
+        label: "Onboarding",
+        icon: Rocket,
+      },
+      { href: "/dashboard/admin/users", label: "Users", icon: Users },
+      {
+        href: "/dashboard/admin/rules",
+        label: "Rules",
+        icon: SlidersHorizontal,
+      },
+      { href: "/dashboard/admin/billing", label: "Billing", icon: CreditCard },
+    );
   }
 
   const quickActions: QuickAction[] = isDirector
@@ -215,6 +209,7 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen">
       <Sidebar
         nav={nav}
+        settings={settings}
         quickActions={quickActions}
         name={displayName}
         roleLabel={roleLabel}
