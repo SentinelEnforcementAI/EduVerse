@@ -47,15 +47,27 @@ async function schoolSignals(db: TenantDb): Promise<SignalRow[]> {
   const signals = await db.signal.findMany({
     where: { status: { in: ["OPEN", "CONFIRMED", "ESCALATED"] } },
     select: {
-      pupil: { select: { yearGroup: true } },
+      pupilId: true,
       ruleVersion: { select: { key: true } },
     },
     take: 1000,
   });
-  return signals.map((s) => ({
-    yearGroup: s.pupil.yearGroup,
-    ruleKey: s.ruleVersion.key,
-  }));
+  // Resolve the pupil separately, under the same RLS context, and skip any
+  // signal whose pupil is not readable here. A signal's pupil is a required
+  // relation, so including it inline makes Prisma throw the whole query if one
+  // row's pupil is unreadable (e.g. a cross-tenant leftover) — that must never
+  // take down a page full of children's signals. One odd row is dropped, not
+  // the view.
+  const pupilIds = [...new Set(signals.map((s) => s.pupilId))];
+  const pupils = await db.pupil.findMany({
+    where: { id: { in: pupilIds } },
+    select: { id: true, yearGroup: true },
+  });
+  const yearById = new Map(pupils.map((p) => [p.id, p.yearGroup]));
+  return signals.flatMap((s) => {
+    const yearGroup = yearById.get(s.pupilId);
+    return yearGroup === undefined ? [] : [{ yearGroup, ruleKey: s.ruleVersion.key }];
+  });
 }
 
 type Aggregate = {
