@@ -9,6 +9,8 @@
     "test": "dotenv -e ../../.env -- vitest run",
     "worker": "dotenv -e ../../.env -- tsx src/worker.ts",
     "trigger": "dotenv -e ../../.env -- tsx src/trigger.ts",
+    "sync:sandbox": "dotenv -e ../../.env -- tsx scripts/sync-sandbox.ts",
+    "sync:sandbox:prod": "tsx scripts/sync-sandbox.ts",
     "worker:prod": "tsx src/worker.ts"
   },
   "dependencies": {

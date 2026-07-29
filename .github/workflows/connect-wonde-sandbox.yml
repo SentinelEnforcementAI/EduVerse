@@ -1,0 +1,98 @@
+# Connect the Wonde sandbox school into the demo trust as a live, engine-
+# analysed school, in one click. Runs the sandbox sync (link -> pull students,
+# attendance, behaviour, attainment -> run the rules engine) as a one-off ECS
+# task on the migrate task definition (owner DB role, needed to create the
+# tenant), with the Wonde API key pulled from Secrets Manager at run time.
+#
+# Prerequisites: the WONDE_API_KEY secret holds the real sandbox key
+# (Secrets Manager: sentinel-watch/wonde-api-key), and you know the sandbox
+# school id (the /v1.0/schools endpoint lists reachable schools).
+name: Connect Wonde sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      wonde_school_id:
+        description: The Wonde sandbox school id to connect
+        required: true
+      school_name:
+        description: Display name for the connected school
+        required: false
+        default: "Wonde Sandbox School"
+      school_slug:
+        description: URL slug for the connected school
+        required: false
+        default: "wonde-sandbox"
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  connect:
+    name: Connect and sync the sandbox school
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync the sandbox school (one-off task, owner role)
+        env:
+          WONDE_SCHOOL_ID: ${{ inputs.wonde_school_id }}
+          SCHOOL_NAME: ${{ inputs.school_name }}
+          SCHOOL_SLUG: ${{ inputs.school_slug }}
+        run: |
+          # Pull the Wonde key from Secrets Manager and mask it so it never
+          # appears in logs, then pass it to the task as an env override
+          # (secrets themselves cannot be added via a run-task override).
+          WONDE_KEY=$(aws secretsmanager get-secret-value \
+            --secret-id "$PROJECT/wonde-api-key" \
+            --query 'SecretString' --output text)
+          echo "::add-mask::$WONDE_KEY"
+
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=$PROJECT-private-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=$PROJECT-worker-*" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          OVERRIDES=$(cat <<JSON
+          {"containerOverrides":[{
+            "name":"migrate",
+            "command":["pnpm","--filter","@sentinel/sync","sync:sandbox:prod",
+              "--school-id","$WONDE_SCHOOL_ID","--slug","$SCHOOL_SLUG","--name","$SCHOOL_NAME"],
+            "environment":[{"name":"WONDE_API_KEY","value":"$WONDE_KEY"}]
+          }]}
+          JSON
+          )
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$PROJECT" \
+            --task-definition "$PROJECT-migrate" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --overrides "$OVERRIDES" \
+            --query 'tasks[0].taskArn' --output text)
+
+          echo "Connect task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Sandbox connect failed (exit $EXIT_CODE) — check /ecs/$PROJECT/worker logs (migrate prefix)"
+            exit 1
+          fi
+          echo "Sandbox school connected and synced."
