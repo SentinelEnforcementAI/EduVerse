@@ -653,7 +653,9 @@ model Pupil {
   lastName          String   @map("last_name")
   yearGroup         Int      @map("year_group")
   registrationGroup String   @map("registration_group")
-  dateOfBirth       DateTime @map("date_of_birth")
+  // Optional: some MIS (and the Wonde sandbox) don't share a date of birth, and
+  // the rules engine doesn't use it. A pupil is valid without one.
+  dateOfBirth       DateTime? @map("date_of_birth")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

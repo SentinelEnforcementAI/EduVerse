@@ -69,7 +69,9 @@ export async function syncStudents(
   const stats = emptyStats();
   // Attribute skips to a field so a 100%-skipped first pull is diagnosable
   // against the real payload (see studentShape) rather than a silent 0 pupils.
-  const skipReasons = { noId: 0, noName: 0, noDob: 0, noYear: 0 };
+  // Date of birth is optional (the sandbox and some MIS omit it, and the rules
+  // engine doesn't use it) — a pupil needs an id, a name and a year group.
+  const skipReasons = { noId: 0, noName: 0, noYear: 0 };
   let firstShape: string | null = null;
   for await (const page of client.students(tenant.wondeSchoolId!)) {
     for (const student of page) {
@@ -83,11 +85,6 @@ export async function syncStudents(
       }
       if (!student.forename || !student.surname) {
         skipReasons.noName += 1;
-        stats.skipped += 1;
-        continue;
-      }
-      if (!dateOfBirth) {
-        skipReasons.noDob += 1;
         stats.skipped += 1;
         continue;
       }
