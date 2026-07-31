@@ -53,14 +53,14 @@ Strapline on screen: **"Every child. Seen. Safe. Supported."**
   Act 4 and Act 5 don't stall on navigation.
 
 **The sandbox school — how to hold it.** The Wonde-connected school ("Wonde
-Sandbox School") is a live *test-data* connection: its **roll is real and live**,
-but its event data is generic MIS test data with no engineered safeguarding
-story, so any concerns on it are not the narrative. Drive Acts 1–4 on the
-**synthetic schools** (Downlands etc.) where the patterns are legible, and use
-the sandbox only in **Act 5** as the "it's real" proof — via the **Admin →
+Sandbox School") is a live *test-data* connection: its **roll is real and live**
+(1,000+ pupils), but the Wonde **sandbox exposes no real attendance or behaviour
+events** — those feeds are empty test skeletons — so the engine has nothing to
+score there and the school carries no safeguarding narrative. Drive Acts 1–4 on
+the **synthetic schools** (Downlands etc.) where the patterns are legible, and
+use the sandbox only in **Act 5** as the "it's real" proof — via the **Admin →
 Connect Wonde** screen and its live roll count. Don't drill into the sandbox
-school's own concern list on stage. (A full data-level tidy of that tenant is a
-safe follow-up; it isn't needed for the story.)
+school's own (empty) concern list on stage.
 
 **One honesty note you can volunteer if asked** (it builds credibility): the
 synthetic schools carry an *engineered* safeguarding story so the pattern is
@@ -214,20 +214,23 @@ in love with it.
 > minutes. But this isn't a mockup. This school is connected **live through
 > Wonde** — the integration layer that already sits on top of the MIS every UK
 > school uses. Read-only, DPIA-gated, one click. Its actual roll — over a
-> thousand pupils — and its real attendance are flowing through the *exact same
-> engine* you just watched. From nothing to a connected, analysed school in
-> minutes."
+> thousand real pupils, with their year groups and registration structure —
+> flowed in live through the *exact same pipeline* you just watched, and it's
+> ready for the engine the moment the school's live attendance and behaviour
+> feeds are switched on. From nothing to a connected school in minutes."
 
 **SO WHAT:** **This kills the "is it vaporware?" question.** The pipeline is real
 and connects to what schools already run. Distribution via Wonde is the go-to-
 market unlock — thousands of schools, one integration.
 
-> If asked why the live school has fewer flagged patterns than the synthetic one:
-> be straight — it's generic MIS test data with no engineered safeguarding story
-> in it. The point of the live school is to prove the *pipeline* and the
-> *field-level integration*; the synthetic schools carry the *narrative*. Same
-> engine over both. (This is genuinely how a real design-partner rollout looks:
-> connect first, the patterns emerge from the school's own real data over weeks.)
+> If asked why the live school shows no flagged patterns: be straight — this is a
+> Wonde **sandbox**, so the roll is real but the attendance/behaviour feeds are
+> empty test data; the engine has nothing to score on it yet. That's the point of
+> the live school — it proves the *pipeline* and the *field-level integration*.
+> The synthetic schools carry the *narrative*. Same engine over both, and nothing
+> on screen is faked. (This is genuinely how a real design-partner rollout looks:
+> connect the roll first; the patterns emerge from the school's own live feeds
+> over the following weeks.)
 
 ---
 
