@@ -8,7 +8,12 @@ import {
   syncStudents,
   type SyncStats,
 } from "./jobs/sync-jobs";
-import { WondeApiError, domainUnavailableFrom, type WondeClient } from "./wonde/client";
+import {
+  WondeApiError,
+  domainUnavailableFrom,
+  type WondeClient,
+  type WondeWindow,
+} from "./wonde/client";
 
 // Connect a Wonde school into a trust as a live, engine-analysed school, in one
 // synchronous pass (no queue/worker needed — for the sandbox and for ops).
@@ -63,6 +68,14 @@ async function optionalDomain(
   }
 }
 
+// Defaults for the first-pull window on the event-data collections. A full
+// school's entire attendance history is hundreds of thousands of rows and takes
+// far too long to pull in one go — and the rules engine only looks at recent
+// windows — so bound the first pull to recently-updated records and cap the
+// pages. Ongoing/nightly sync then advances from there.
+const DEFAULT_RECENT_DAYS = 400;
+const DEFAULT_MAX_PAGES = 60;
+
 export async function syncSandboxSchool(
   client: WondeClient,
   opts: {
@@ -70,8 +83,22 @@ export async function syncSandboxSchool(
     schoolSlug: string;
     schoolName: string;
     wondeSchoolId: string;
+    // First-pull window overrides (event data only). recentDays 0 = no date
+    // filter; maxPages 0 = no page cap (pull everything — slow on a full roll).
+    recentDays?: number;
+    maxPages?: number;
   },
 ): Promise<SandboxReport> {
+  const recentDays = opts.recentDays ?? DEFAULT_RECENT_DAYS;
+  const maxPages = opts.maxPages ?? DEFAULT_MAX_PAGES;
+  const window: WondeWindow = {
+    updatedAfter:
+      recentDays > 0
+        ? new Date(Date.now() - recentDays * 24 * 60 * 60 * 1000).toISOString()
+        : undefined,
+    maxPages: maxPages > 0 ? maxPages : undefined,
+  };
+
   const trust = await systemDb.trust.findUnique({
     where: { slug: opts.trustSlug },
   });
@@ -123,17 +150,17 @@ export async function syncSandboxSchool(
   );
   const attendance = await optionalDomain(
     "attendance",
-    () => syncAttendance(client, tenant),
+    () => syncAttendance(client, tenant, window),
     skippedDomains,
   );
   const behaviour = await optionalDomain(
     "behaviour",
-    () => syncBehaviour(client, tenant),
+    () => syncBehaviour(client, tenant, window),
     skippedDomains,
   );
   const attainment = await optionalDomain(
     "attainment",
-    () => syncAttainment(client, tenant),
+    () => syncAttainment(client, tenant, window),
     skippedDomains,
   );
 

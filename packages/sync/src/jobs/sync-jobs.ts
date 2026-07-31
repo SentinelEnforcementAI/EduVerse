@@ -1,6 +1,6 @@
 import { systemDb, type SyncType, type Tenant } from "@sentinel/db";
 
-import type { WondeClient } from "../wonde/client";
+import type { WondeClient, WondeWindow } from "../wonde/client";
 import type {
   WondeBehaviour,
   WondeResult,
@@ -214,12 +214,13 @@ export async function syncStudents(
 export async function syncAttendance(
   client: WondeClient,
   tenant: Tenant,
+  window: WondeWindow = {},
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
   let firstShape: string | null = null;
 
-  for await (const page of client.sessionAttendance(tenant.wondeSchoolId!)) {
+  for await (const page of client.sessionAttendance(tenant.wondeSchoolId!, window)) {
     const rows: SourcedRow[] = [];
     for (const record of page) {
       if (firstShape === null) firstShape = recordShape(record as Record<string, unknown>);
@@ -283,12 +284,13 @@ const SEVERITY_BY_POINTS = (points: number | null | undefined): number =>
 export async function syncBehaviour(
   client: WondeClient,
   tenant: Tenant,
+  window: WondeWindow = {},
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
   let firstShape: string | null = null;
 
-  for await (const page of client.behaviours(tenant.wondeSchoolId!)) {
+  for await (const page of client.behaviours(tenant.wondeSchoolId!, window)) {
     const rows: SourcedRow[] = [];
     for (const behaviour of page) {
       if (firstShape === null) firstShape = recordShape(behaviour as Record<string, unknown>);
@@ -358,11 +360,12 @@ export async function syncBehaviour(
 export async function syncAttainment(
   client: WondeClient,
   tenant: Tenant,
+  window: WondeWindow = {},
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
 
-  for await (const page of client.results(tenant.wondeSchoolId!)) {
+  for await (const page of client.results(tenant.wondeSchoolId!, window)) {
     const rows: SourcedRow[] = [];
     for (const result of page) {
       const studentId = result.student?.data?.id ?? result.student_id;

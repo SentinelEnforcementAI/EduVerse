@@ -188,10 +188,15 @@ export class WondeClient {
   private async *paginate<T>(
     path: string,
     params: Record<string, string> = {},
+    opts: { maxPages?: number } = {},
   ): AsyncGenerator<T[]> {
     // Copied so include self-healing persists across pages without touching
     // the caller's literal.
     const query = { ...params };
+    // A soft cap bounds a first pull of a large collection (a full-school
+    // attendance register is hundreds of thousands of rows); on reaching it we
+    // stop gracefully with a warning rather than fetching the entire history.
+    const softCap = opts.maxPages;
     for (let page = 1; page <= MAX_PAGES; page++) {
       query.per_page = String(PER_PAGE);
       query.page = String(page);
@@ -203,6 +208,13 @@ export class WondeClient {
       const pagination = raw.meta?.pagination;
       const hasMore = pagination?.more === true || Boolean(pagination?.next);
       if (!hasMore) return;
+      if (softCap && page >= softCap) {
+        console.warn(
+          `[wonde] ${path}: stopping after ${softCap} pages (~${softCap * PER_PAGE} rows); ` +
+            `narrow the window or run incrementally to pull the rest`,
+        );
+        return;
+      }
     }
     throw new WondeApiError(`Pagination did not terminate on ${path}`);
   }
@@ -225,23 +237,55 @@ export class WondeClient {
     );
   }
 
-  sessionAttendance(schoolId: string): AsyncGenerator<WondeSessionAttendance[]> {
+  // The event-data collections (attendance/behaviour/attainment) accept a
+  // window: `updatedAfter` (Wonde's `updated_after` incremental filter, an ISO
+  // timestamp) limits the pull to recently-changed records — the current
+  // academic period rather than the school's entire history — and `maxPages`
+  // caps a first pull so it always completes in bounded time. The rules engine
+  // only looks at recent windows, so a recent slice is what it needs anyway.
+  sessionAttendance(
+    schoolId: string,
+    window: WondeWindow = {},
+  ): AsyncGenerator<WondeSessionAttendance[]> {
     return this.paginate<WondeSessionAttendance>(
       `/v1.0/schools/${schoolId}/attendance/session`,
-      { include: "student,attendance_code" },
+      withUpdatedAfter({ include: "student,attendance_code" }, window),
+      { maxPages: window.maxPages },
     );
   }
 
-  behaviours(schoolId: string): AsyncGenerator<WondeBehaviour[]> {
+  behaviours(
+    schoolId: string,
+    window: WondeWindow = {},
+  ): AsyncGenerator<WondeBehaviour[]> {
     return this.paginate<WondeBehaviour>(
       `/v1.0/schools/${schoolId}/behaviours`,
-      { include: "students" },
+      withUpdatedAfter({ include: "students" }, window),
+      { maxPages: window.maxPages },
     );
   }
 
-  results(schoolId: string): AsyncGenerator<WondeResult[]> {
-    return this.paginate<WondeResult>(`/v1.0/schools/${schoolId}/results`, {
-      include: "aspect,subject,student",
-    });
+  results(
+    schoolId: string,
+    window: WondeWindow = {},
+  ): AsyncGenerator<WondeResult[]> {
+    return this.paginate<WondeResult>(
+      `/v1.0/schools/${schoolId}/results`,
+      withUpdatedAfter({ include: "aspect,subject,student" }, window),
+      { maxPages: window.maxPages },
+    );
   }
+}
+
+// A bound on an event-data pull: only records updated since `updatedAfter`
+// (ISO 8601), and at most `maxPages` pages.
+export type WondeWindow = { updatedAfter?: string; maxPages?: number };
+
+function withUpdatedAfter(
+  params: Record<string, string>,
+  window: WondeWindow,
+): Record<string, string> {
+  return window.updatedAfter
+    ? { ...params, updated_after: window.updatedAfter }
+    : params;
 }
