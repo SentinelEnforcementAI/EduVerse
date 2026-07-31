@@ -6,6 +6,10 @@ name: Diagnose logs
 on:
   workflow_dispatch:
     inputs:
+      service:
+        description: Which log group (web or worker; worker also holds migrate)
+        required: false
+        default: "web"
       minutes:
         description: How many minutes back to read
         required: false
@@ -36,10 +40,11 @@ jobs:
 
       - name: Filter web log group for recent events
         env:
+          SERVICE: ${{ inputs.service }}
           MINUTES: ${{ inputs.minutes }}
           FILTER: ${{ inputs.filter }}
         run: |
-          GROUP="/ecs/$PROJECT/web"
+          GROUP="/ecs/$PROJECT/${SERVICE:-web}"
           START=$(( ($(date +%s) - MINUTES * 60) * 1000 ))
           echo "Log group: $GROUP"
           echo "Since: ${MINUTES}m ago (start=$START), filter='${FILTER}'"
