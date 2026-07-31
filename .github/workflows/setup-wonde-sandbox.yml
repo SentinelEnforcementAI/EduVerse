@@ -57,6 +57,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Realign owner DB secret with the current master password
+        run: |
+          # The connect task runs on the owner (migrate) task def; keep its
+          # credentials current against the AWS-managed, rotating master secret.
+          MASTER_ARN=$(aws rds describe-db-instances --db-instance-identifier "$PROJECT-db" \
+            --query 'DBInstances[0].MasterUserSecret.SecretArn' --output text)
+          ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier "$PROJECT-db" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)
+          CREDS=$(aws secretsmanager get-secret-value --secret-id "$MASTER_ARN" \
+            --query SecretString --output text)
+          DB_USER=$(echo "$CREDS" | jq -r .username)
+          DB_PASS=$(echo "$CREDS" | jq -r '.password | @uri')
+          echo "::add-mask::$DB_PASS"
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/database-url-owner" \
+            --secret-string "postgresql://$DB_USER:$DB_PASS@$ENDPOINT:5432/sentinel_watch" >/dev/null
+          echo "Owner DB secret realigned."
+
       - name: Store key, list schools, connect
         env:
           WONDE_KEY: ${{ secrets.WONDE_SANDBOX_KEY }}

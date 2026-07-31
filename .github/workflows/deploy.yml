@@ -54,6 +54,26 @@ jobs:
           docker push --all-tags "$REGISTRY/$PROJECT/web"
           docker push --all-tags "$REGISTRY/$PROJECT/worker"
 
+      - name: Realign owner DB secret with the current master password
+        run: |
+          # The RDS master password is AWS-managed and rotates on a schedule.
+          # The owner connection string is a copy, so re-derive it from the
+          # current master secret before migrations, else migrate deploy fails
+          # P1000 (authentication failed for sentinel_owner) after a rotation.
+          MASTER_ARN=$(aws rds describe-db-instances --db-instance-identifier "$PROJECT-db" \
+            --query 'DBInstances[0].MasterUserSecret.SecretArn' --output text)
+          ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier "$PROJECT-db" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)
+          CREDS=$(aws secretsmanager get-secret-value --secret-id "$MASTER_ARN" \
+            --query SecretString --output text)
+          DB_USER=$(echo "$CREDS" | jq -r .username)
+          DB_PASS=$(echo "$CREDS" | jq -r '.password | @uri')
+          echo "::add-mask::$DB_PASS"
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/database-url-owner" \
+            --secret-string "postgresql://$DB_USER:$DB_PASS@$ENDPOINT:5432/sentinel_watch" >/dev/null
+          echo "Owner DB secret realigned with the current master password."
+
       - name: Run database migrations (one-off task, owner role)
         run: |
           SUBNETS=$(aws ec2 describe-subnets \
