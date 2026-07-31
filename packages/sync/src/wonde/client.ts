@@ -56,6 +56,29 @@ function invalidIncludeFrom(error: WondeApiError): string | null {
   return null;
 }
 
+// Wonde returns 403 invalid_permissions when the access token's app has not
+// been granted a data scope for a school, e.g.
+//   {"error":"invalid_permissions","error_description":"Scope attendance.read not enabled"}
+// The connect can still proceed with the scopes that ARE enabled (a school with
+// only a roll is still a connected school), so callers use this to skip a data
+// domain rather than fail. Returns the human-readable scope description, or null
+// if the error is a different 403.
+export function missingScopeFrom(error: WondeApiError): string | null {
+  if (error.status !== 403 || !error.body) return null;
+  try {
+    const parsed = JSON.parse(error.body) as {
+      error?: string;
+      error_description?: string;
+    };
+    if (parsed.error === "invalid_permissions") {
+      return parsed.error_description?.trim() ?? "permission not enabled";
+    }
+  } catch {
+    // Non-JSON body — fall through.
+  }
+  return null;
+}
+
 export class HttpWondeTransport implements WondeTransport {
   constructor(
     private readonly apiKey: string,

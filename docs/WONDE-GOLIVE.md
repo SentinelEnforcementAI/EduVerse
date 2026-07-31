@@ -74,6 +74,28 @@ expansion and retries, logging `[wonde] …: dropping unsupported include "x"`, 
 the sync degrades to fewer fields instead of failing the connect. A dropped
 `registration_group` falls back to a readable `Yr N` label on the pupil.
 
+## Missing scopes self-heal (and how to fill them in)
+
+Wonde returns `403 invalid_permissions` (`"Scope attendance.read not enabled"`)
+when the token's application has not been granted a **data scope** for a school.
+The connect treats each data domain (students, attendance, behaviour, attainment)
+as best-effort: if a scope is not granted, that domain is **skipped** and the
+connect still succeeds with the scopes that are — a school with only a roll is
+still a connected school. The run reports what it skipped, e.g.:
+
+```
+Skipped (Wonde scope not enabled for this token/school):
+  attendance (Scope attendance.read not enabled).
+```
+
+The **risk engine needs attendance, behaviour and attainment** to raise signals,
+so for a data-rich sandbox demo, enable those scopes on the Wonde application
+(Wonde dashboard → the app's data scopes: `attendance.read`, `behaviour.read`,
+`assessment.read`/results) and re-run the connect — it is idempotent and will
+backfill the newly-permitted data. Students-only is enough to prove the live
+roll and the pipeline; the synthetic Weald schools carry the engineered risk
+narrative in the meantime.
+
 ## First-run verification
 
 The client and mappers follow Wonde's published v1.0 structure, but the exact

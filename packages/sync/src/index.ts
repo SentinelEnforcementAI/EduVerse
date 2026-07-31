@@ -1,5 +1,11 @@
-export { HttpWondeTransport, WondeClient, WondeApiError } from "./wonde/client";
+export {
+  HttpWondeTransport,
+  WondeClient,
+  WondeApiError,
+  missingScopeFrom,
+} from "./wonde/client";
 export type { WondeTransport } from "./wonde/client";
+export { syncSandboxSchool, type SandboxReport } from "./sandbox";
 export type { WondeSchool } from "./wonde/types";
 export {
   runSync,

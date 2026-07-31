@@ -48,6 +48,15 @@ async function main() {
       `${report.students.created + report.students.updated} pupils, ` +
       `rules ${report.rulesStatus}, ${report.openSignals} open signals.`,
   );
+  if (report.skippedDomains.length > 0) {
+    console.info(
+      `\nSkipped (Wonde scope not enabled for this token/school): ` +
+        `${report.skippedDomains.join("; ")}.\n` +
+        `Enable the scope(s) in the Wonde application settings and re-run to ` +
+        `pull that data — the rules engine needs attendance/behaviour/` +
+        `attainment to raise signals.`,
+    );
+  }
   await systemDb.$disconnect();
 }
 

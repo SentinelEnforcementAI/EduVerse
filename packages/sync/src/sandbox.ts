@@ -8,7 +8,7 @@ import {
   syncStudents,
   type SyncStats,
 } from "./jobs/sync-jobs";
-import type { WondeClient } from "./wonde/client";
+import { WondeApiError, missingScopeFrom, type WondeClient } from "./wonde/client";
 
 // Connect a Wonde school into a trust as a live, engine-analysed school, in one
 // synchronous pass (no queue/worker needed — for the sandbox and for ops).
@@ -30,7 +30,35 @@ export type SandboxReport = {
   attainment: SyncStats;
   rulesStatus: string;
   openSignals: number;
+  // Data domains skipped because the Wonde token's app is not granted their
+  // scope on this school, e.g. "attendance (Scope attendance.read not enabled)".
+  // The connect still succeeds with the scopes that ARE enabled.
+  skippedDomains: string[];
 };
+
+const ZERO_STATS: SyncStats = { created: 0, updated: 0, skipped: 0 };
+
+// Run one data-domain sync, tolerating a missing Wonde scope: if the token's app
+// has not been granted that scope on this school, record it as skipped and carry
+// on, rather than failing the whole connect. Any other error still propagates.
+async function optionalDomain(
+  label: string,
+  run: () => Promise<SyncStats>,
+  skipped: string[],
+): Promise<SyncStats> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof WondeApiError) {
+      const scope = missingScopeFrom(error);
+      if (scope) {
+        skipped.push(`${label} (${scope})`);
+        return ZERO_STATS;
+      }
+    }
+    throw error;
+  }
+}
 
 export async function syncSandboxSchool(
   client: WondeClient,
@@ -80,10 +108,31 @@ export async function syncSandboxSchool(
     },
   });
 
-  const students = await syncStudents(client, tenant);
-  const attendance = await syncAttendance(client, tenant);
-  const behaviour = await syncBehaviour(client, tenant);
-  const attainment = await syncAttainment(client, tenant);
+  // Students first: the other jobs resolve pupils by wonde_id. Each data domain
+  // is best-effort against the token's granted scopes — a school with only a
+  // roll is still a connected school; attendance/behaviour/attainment fill in
+  // the risk picture as their scopes are enabled.
+  const skippedDomains: string[] = [];
+  const students = await optionalDomain(
+    "students",
+    () => syncStudents(client, tenant),
+    skippedDomains,
+  );
+  const attendance = await optionalDomain(
+    "attendance",
+    () => syncAttendance(client, tenant),
+    skippedDomains,
+  );
+  const behaviour = await optionalDomain(
+    "behaviour",
+    () => syncBehaviour(client, tenant),
+    skippedDomains,
+  );
+  const attainment = await optionalDomain(
+    "attainment",
+    () => syncAttainment(client, tenant),
+    skippedDomains,
+  );
 
   const rules = await runRulesForTenant(tenant.id, new Date());
   const openSignals = await systemDb.signal.count({
@@ -100,5 +149,6 @@ export async function syncSandboxSchool(
     attainment,
     rulesStatus: rules.status,
     openSignals,
+    skippedDomains,
   };
 }
