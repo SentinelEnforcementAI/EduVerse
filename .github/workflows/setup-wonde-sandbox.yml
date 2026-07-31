@@ -140,9 +140,21 @@ jobs:
             --overrides "$OVERRIDES" \
             --query 'tasks[0].taskArn' --output text)
           echo "Connect task: $TASK_ARN"
-          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$TASK_ARN"
+          # `aws ecs wait tasks-stopped` gives up after ~10 min (100×6s); a first
+          # pull of a large roll can take longer, so poll for up to 30 min.
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$TASK_ARN" \
+              --query 'tasks[0].lastStatus' --output text)
+            echo "  task status: $STATUS"
+            [ "$STATUS" = "STOPPED" ] && break
+            sleep 20
+          done
           EXIT_CODE=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$TASK_ARN" \
             --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$STATUS" != "STOPPED" ]; then
+            echo "Connect still running after 30 min — check /ecs/$PROJECT/worker logs (migrate prefix)"
+            exit 1
+          fi
           if [ "$EXIT_CODE" != "0" ]; then
             echo "Connect failed (exit $EXIT_CODE) — check /ecs/$PROJECT/worker logs (migrate prefix)"
             exit 1
