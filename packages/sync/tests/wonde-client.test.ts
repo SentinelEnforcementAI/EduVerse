@@ -105,6 +105,36 @@ describe("WondeClient include self-healing", () => {
     expect(pages.flat().map((s) => s.id)).toEqual(["WS1"]);
   });
 
+  it("narrows includes on a generic invalid_include that names no field", async () => {
+    // Wonde's attendance endpoint 400s with a generic "Invalid includes" that
+    // doesn't say which include is bad. The client must drop includes from the
+    // end until the request is accepted (here: keep "student", drop the rest).
+    const attempts: (string | undefined)[] = [];
+    const transport: WondeTransport = {
+      get(_path, params) {
+        attempts.push(params.include);
+        const includes = (params.include ?? "").split(",").filter(Boolean);
+        if (includes.includes("attendance_code")) {
+          return Promise.reject(
+            new WondeApiError("Wonde API 400", 400, JSON.stringify({
+              error: "invalid_include",
+              error_description: "Invalid includes",
+            })),
+          );
+        }
+        return Promise.resolve({ data: [{ id: "R1" }], meta: { pagination: { more: false } } });
+      },
+    };
+
+    const pages: unknown[][] = [];
+    for await (const page of new WondeClient(transport).sessionAttendance("A1930499544")) {
+      pages.push(page);
+    }
+    expect(attempts[0]).toBe("student,attendance_code");
+    expect(attempts[1]).toBe("student");
+    expect(pages.flat()).toHaveLength(1);
+  });
+
   it("rethrows a 400 that is not an invalid_include", async () => {
     const transport: WondeTransport = {
       get: () =>

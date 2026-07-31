@@ -62,6 +62,20 @@ function studentShape(student: WondeStudent): string {
   });
 }
 
+// Structural key sample of any record, for diagnosing why a domain's rows are
+// being skipped (usually pupil resolution or a differently-nested field).
+// Keys and one level of relation keys only — no identifying values.
+function recordShape(record: Record<string, unknown>): string {
+  const relKeys = (v: unknown): string[] | string =>
+    v && typeof v === "object" ? Object.keys(v as object) : typeof v;
+  return JSON.stringify({
+    keys: Object.keys(record),
+    studentKeys: relKeys((record as { student?: unknown }).student),
+    studentsKeys: relKeys((record as { students?: unknown }).students),
+    attendanceCodeKeys: relKeys((record as { attendance_code?: unknown }).attendance_code),
+  });
+}
+
 export async function syncStudents(
   client: WondeClient,
   tenant: Tenant,
@@ -141,9 +155,11 @@ export async function syncAttendance(
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
+  let firstShape: string | null = null;
 
   for await (const page of client.sessionAttendance(tenant.wondeSchoolId!)) {
     for (const record of page) {
+      if (firstShape === null) firstShape = recordShape(record as Record<string, unknown>);
       const studentId = record.student?.data?.id ?? record.student_id;
       const pupilId = studentId ? pupilIds.get(studentId) : undefined;
       const date = dateFrom(record.date ?? null);
@@ -189,6 +205,12 @@ export async function syncAttendance(
       }
     }
   }
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+    console.warn(
+      `[wonde] all ${stats.skipped} attendance records skipped (pupil link or ` +
+        `field nesting) — sample shape ${firstShape}`,
+    );
+  }
   return stats;
 }
 
@@ -201,9 +223,11 @@ export async function syncBehaviour(
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
+  let firstShape: string | null = null;
 
   for await (const page of client.behaviours(tenant.wondeSchoolId!)) {
     for (const behaviour of page) {
+      if (firstShape === null) firstShape = recordShape(behaviour as Record<string, unknown>);
       const date = dateFrom(behaviour.date ?? null);
       const students = behaviour.students?.data ?? [];
       if (!behaviour.id || !date || students.length === 0) {
@@ -240,6 +264,12 @@ export async function syncBehaviour(
         }
       }
     }
+  }
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+    console.warn(
+      `[wonde] all ${stats.skipped} behaviour records skipped (pupil link or ` +
+        `field nesting) — sample shape ${firstShape}`,
+    );
   }
   return stats;
 }

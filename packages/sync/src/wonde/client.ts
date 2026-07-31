@@ -142,6 +142,11 @@ export class WondeClient {
   // school's MIS (or the sandbox) rejects an include, drop it and retry so the
   // sync degrades to fewer fields instead of failing outright. Mutates the
   // caller's params so the dropped include stays dropped for later pages too.
+  //
+  // Wonde sometimes names the offending include ("registration_group") and
+  // sometimes returns a generic "Invalid includes" without saying which. When
+  // it names one we drop that; when it doesn't, we drop the last include and
+  // retry, narrowing to the largest accepted subset (down to none).
   private async fetchPage(
     path: string,
     params: Record<string, string>,
@@ -151,21 +156,30 @@ export class WondeClient {
         return await this.transport.get(path, params);
       } catch (error) {
         if (!(error instanceof WondeApiError)) throw error;
-        const bad = invalidIncludeFrom(error);
+        if (invalidIncludeFrom(error) === null) throw error;
         const current = params.include;
-        if (!bad || !current) throw error;
-        const remaining = current
+        if (!current) throw error;
+        const tokens = current
           .split(",")
           .map((part) => part.trim())
-          .filter((part) => part && part !== bad);
-        if (remaining.length === current.split(",").length) throw error;
+          .filter(Boolean);
+        const named = invalidIncludeFrom(error);
+        // Drop the named include if it's one we sent; otherwise (generic error)
+        // drop the last include to narrow the set.
+        const remaining =
+          named && tokens.includes(named)
+            ? tokens.filter((part) => part !== named)
+            : tokens.slice(0, -1);
+        const dropped =
+          named && tokens.includes(named) ? named : tokens[tokens.length - 1];
         if (remaining.length > 0) {
           params.include = remaining.join(",");
         } else {
           delete params.include;
         }
         console.warn(
-          `[wonde] ${path}: dropping unsupported include "${bad}" and retrying`,
+          `[wonde] ${path}: dropping unsupported include "${dropped}" and retrying` +
+            (remaining.length > 0 ? ` (keeping ${remaining.join(",")})` : " (no includes left)"),
         );
       }
     }
