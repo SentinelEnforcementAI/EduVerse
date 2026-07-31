@@ -8,7 +8,7 @@ import {
   syncStudents,
   type SyncStats,
 } from "./jobs/sync-jobs";
-import { WondeApiError, missingScopeFrom, type WondeClient } from "./wonde/client";
+import { WondeApiError, domainUnavailableFrom, type WondeClient } from "./wonde/client";
 
 // Connect a Wonde school into a trust as a live, engine-analysed school, in one
 // synchronous pass (no queue/worker needed — for the sandbox and for ops).
@@ -30,17 +30,20 @@ export type SandboxReport = {
   attainment: SyncStats;
   rulesStatus: string;
   openSignals: number;
-  // Data domains skipped because the Wonde token's app is not granted their
-  // scope on this school, e.g. "attendance (Scope attendance.read not enabled)".
-  // The connect still succeeds with the scopes that ARE enabled.
+  // Data domains skipped because this school's MIS does not expose them: the
+  // Wonde app is not granted the scope (403), e.g.
+  // "attendance (Scope attendance.read not enabled)", or the resource does not
+  // exist (404), e.g. "attainment (Resource not found)". The connect still
+  // succeeds with the domains that ARE available.
   skippedDomains: string[];
 };
 
 const ZERO_STATS: SyncStats = { created: 0, updated: 0, skipped: 0 };
 
-// Run one data-domain sync, tolerating a missing Wonde scope: if the token's app
-// has not been granted that scope on this school, record it as skipped and carry
-// on, rather than failing the whole connect. Any other error still propagates.
+// Run one data-domain sync, tolerating a domain this school's MIS does not
+// expose: if its scope is not granted (403) or its resource does not exist
+// (404), record it as skipped and carry on, rather than failing the whole
+// connect. Any other error still propagates.
 async function optionalDomain(
   label: string,
   run: () => Promise<SyncStats>,
@@ -50,9 +53,9 @@ async function optionalDomain(
     return await run();
   } catch (error) {
     if (error instanceof WondeApiError) {
-      const scope = missingScopeFrom(error);
-      if (scope) {
-        skipped.push(`${label} (${scope})`);
+      const reason = domainUnavailableFrom(error);
+      if (reason) {
+        skipped.push(`${label} (${reason})`);
         return ZERO_STATS;
       }
     }

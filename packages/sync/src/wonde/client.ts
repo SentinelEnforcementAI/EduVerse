@@ -79,6 +79,33 @@ export function missingScopeFrom(error: WondeApiError): string | null {
   return null;
 }
 
+// A data domain a school's MIS does not expose at all: Wonde returns
+// 404 resource_not_found for the endpoint, e.g. a school with no assessment
+// module answering /results. Like a missing scope, this should skip the domain
+// rather than fail the whole connect.
+export function resourceNotFoundFrom(error: WondeApiError): string | null {
+  if (error.status !== 404 || !error.body) return null;
+  try {
+    const parsed = JSON.parse(error.body) as {
+      error?: string;
+      error_description?: string;
+    };
+    if (parsed.error === "resource_not_found") {
+      return parsed.error_description?.trim() || "resource not found";
+    }
+  } catch {
+    // Non-JSON body — fall through.
+  }
+  return null;
+}
+
+// A data domain that cannot be pulled for this school because its scope is not
+// granted (403) or its resource does not exist (404). Returns a human-readable
+// reason to record against the skipped domain, or null for any other error.
+export function domainUnavailableFrom(error: WondeApiError): string | null {
+  return missingScopeFrom(error) ?? resourceNotFoundFrom(error);
+}
+
 export class HttpWondeTransport implements WondeTransport {
   constructor(
     private readonly apiKey: string,

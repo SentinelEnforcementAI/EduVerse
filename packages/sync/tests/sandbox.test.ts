@@ -81,7 +81,7 @@ describe("syncSandboxSchool", () => {
     expect(second.students.updated).toBe(3);
   }, 60_000);
 
-  it("connects with the roll and skips a domain whose Wonde scope is not enabled", async () => {
+  it("connects with the roll and skips domains the MIS doesn't expose (403 scope / 404 resource)", async () => {
     const scopeRun = randomUUID().slice(0, 8);
     const scopeTrust = `sbx-trust-${scopeRun}`;
     const scopeSchool = `sbx-school-${scopeRun}`;
@@ -111,10 +111,11 @@ describe("syncSandboxSchool", () => {
       if (result.student?.data?.id) result.student.data.id = uid(result.student.data.id);
     }
 
-    // Attendance scope not granted for this token: Wonde 403s that endpoint.
-    // The connect must still ingest the roll and carry on.
+    // This school's MIS exposes neither attendance (403 scope not enabled) nor
+    // results (404 resource not found). The connect must still ingest the roll
+    // and behaviour, and carry on.
     const base = new FakeWondeTransport(scopeWondeId, fixture);
-    const scopeGatedTransport: WondeTransport = {
+    const gatedTransport: WondeTransport = {
       get(path, params) {
         if (path.endsWith("/attendance/session")) {
           return Promise.reject(
@@ -128,26 +129,39 @@ describe("syncSandboxSchool", () => {
             ),
           );
         }
+        if (path.endsWith("/results")) {
+          return Promise.reject(
+            new WondeApiError(
+              `Wonde API 404 on ${path}`,
+              404,
+              JSON.stringify({
+                error: "resource_not_found",
+                error_description: "Resource not found",
+              }),
+            ),
+          );
+        }
         return base.get(path, params);
       },
     };
 
     try {
-      const report = await syncSandboxSchool(new WondeClient(scopeGatedTransport), {
+      const report = await syncSandboxSchool(new WondeClient(gatedTransport), {
         trustSlug: scopeTrust,
         schoolSlug: scopeSchool,
         schoolName: "Scope School",
         wondeSchoolId: scopeWondeId,
       });
 
-      // Roll and the granted domains still came in.
+      // Roll and the available domain still came in.
       expect(report.students.created).toBe(3);
       expect(report.behaviour.created).toBeGreaterThan(0);
-      expect(report.attainment.created).toBeGreaterThan(0);
-      // Attendance was skipped, not fatal, and reported with its scope.
+      // The two unavailable domains were skipped, not fatal, each with a reason.
       expect(report.attendance).toEqual({ created: 0, updated: 0, skipped: 0 });
+      expect(report.attainment).toEqual({ created: 0, updated: 0, skipped: 0 });
       expect(report.skippedDomains).toEqual([
         "attendance (Scope attendance.read not enabled)",
+        "attainment (Resource not found)",
       ]);
       // The engine still ran over whatever data was available.
       expect(report.rulesStatus).toBe("SUCCEEDED");

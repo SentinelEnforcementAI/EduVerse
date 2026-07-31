@@ -74,18 +74,22 @@ expansion and retries, logging `[wonde] …: dropping unsupported include "x"`, 
 the sync degrades to fewer fields instead of failing the connect. A dropped
 `registration_group` falls back to a readable `Yr N` label on the pupil.
 
-## Missing scopes self-heal (and how to fill them in)
+## Unavailable domains self-heal (and how to fill them in)
 
-Wonde returns `403 invalid_permissions` (`"Scope attendance.read not enabled"`)
-when the token's application has not been granted a **data scope** for a school.
-The connect treats each data domain (students, attendance, behaviour, attainment)
-as best-effort: if a scope is not granted, that domain is **skipped** and the
-connect still succeeds with the scopes that are — a school with only a roll is
-still a connected school. The run reports what it skipped, e.g.:
+A school's MIS may not expose every data domain to the token: Wonde returns
+`403 invalid_permissions` (`"Scope attendance.read not enabled"`) when the app is
+not granted a **data scope**, or `404 resource_not_found` when the **resource
+does not exist** for that school (e.g. no assessment module answering
+`/results`). The connect treats each data domain (students, attendance,
+behaviour, attainment) as best-effort: if a domain is unavailable for either
+reason, it is **skipped** and the connect still succeeds with the domains that
+are — a school with only a roll is still a connected school. The run reports what
+it skipped, e.g.:
 
 ```
 Skipped (Wonde scope not enabled for this token/school):
-  attendance (Scope attendance.read not enabled).
+  attendance (Scope attendance.read not enabled);
+  attainment (Resource not found).
 ```
 
 The **risk engine needs attendance, behaviour and attainment** to raise signals,

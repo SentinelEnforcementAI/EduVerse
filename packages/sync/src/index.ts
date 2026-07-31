@@ -3,6 +3,8 @@ export {
   WondeClient,
   WondeApiError,
   missingScopeFrom,
+  resourceNotFoundFrom,
+  domainUnavailableFrom,
 } from "./wonde/client";
 export type { WondeTransport } from "./wonde/client";
 export { syncSandboxSchool, type SandboxReport } from "./sandbox";
