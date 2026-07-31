@@ -20,6 +20,9 @@ async function main() {
       slug: { type: "string", default: "wonde-sandbox" },
       name: { type: "string", default: "Wonde Sandbox School" },
       trust: { type: "string", default: "weald-learning-trust" },
+      // First-pull window overrides (event data only). 0 disables that bound.
+      "recent-days": { type: "string" },
+      "max-pages": { type: "string" },
     },
   });
 
@@ -40,6 +43,8 @@ async function main() {
     schoolSlug: values.slug!,
     schoolName: values.name!,
     wondeSchoolId,
+    recentDays: values["recent-days"] ? Number(values["recent-days"]) : undefined,
+    maxPages: values["max-pages"] ? Number(values["max-pages"]) : undefined,
   });
 
   console.info(JSON.stringify(report, null, 2));

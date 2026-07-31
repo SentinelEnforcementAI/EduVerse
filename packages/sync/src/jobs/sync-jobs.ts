@@ -124,18 +124,13 @@ function studentShape(student: WondeStudent): string {
   });
 }
 
-// Structural key sample of any record, for diagnosing why a domain's rows are
-// being skipped (usually pupil resolution or a differently-nested field).
-// Keys and one level of relation keys only — no identifying values.
+// A sample of a raw record for diagnosing why a domain's rows are being skipped
+// (usually pupil resolution or a differently-nested field). The Wonde sandbox is
+// synthetic test data (no real pupils), so a truncated JSON sample is safe and
+// is the fastest way to see the real field layout and correct the mapping.
+// DIAGNOSTIC: only used on the sandbox/test connection.
 function recordShape(record: Record<string, unknown>): string {
-  const relKeys = (v: unknown): string[] | string =>
-    v && typeof v === "object" ? Object.keys(v as object) : typeof v;
-  return JSON.stringify({
-    keys: Object.keys(record),
-    studentKeys: relKeys((record as { student?: unknown }).student),
-    studentsKeys: relKeys((record as { students?: unknown }).students),
-    attendanceCodeKeys: relKeys((record as { attendance_code?: unknown }).attendance_code),
-  });
+  return JSON.stringify(record).slice(0, 900);
 }
 
 export async function syncStudents(
@@ -269,10 +264,10 @@ export async function syncAttendance(
       }),
     );
   }
-  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+  if (firstShape) {
     console.warn(
-      `[wonde] all ${stats.skipped} attendance records skipped (pupil link or ` +
-        `field nesting) — sample shape ${firstShape}`,
+      `[wonde] attendance pull: created=${stats.created} updated=${stats.updated} ` +
+        `skipped=${stats.skipped}; sample record ${firstShape}`,
     );
   }
   return stats;
@@ -348,10 +343,10 @@ export async function syncBehaviour(
       }),
     );
   }
-  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+  if (firstShape) {
     console.warn(
-      `[wonde] all ${stats.skipped} behaviour records skipped (pupil link or ` +
-        `field nesting) — sample shape ${firstShape}`,
+      `[wonde] behaviour pull: created=${stats.created} updated=${stats.updated} ` +
+        `skipped=${stats.skipped}; sample record ${firstShape}`,
     );
   }
   return stats;

@@ -23,6 +23,14 @@ on:
         description: URL slug for the connected school
         required: false
         default: "wonde-sandbox"
+      recent_days:
+        description: "Event-data window in days (0 = no date filter; blank = default)"
+        required: false
+        default: ""
+      max_pages:
+        description: "Max pages per event-data domain (0 = uncapped; blank = default; small = fast diagnostic)"
+        required: false
+        default: ""
 
 concurrency:
   group: deploy-production
@@ -81,6 +89,8 @@ jobs:
           SCHOOL_ID_IN: ${{ inputs.wonde_school_id }}
           SCHOOL_NAME: ${{ inputs.school_name }}
           SCHOOL_SLUG: ${{ inputs.school_slug }}
+          RECENT_DAYS: ${{ inputs.recent_days }}
+          MAX_PAGES: ${{ inputs.max_pages }}
         run: |
           echo "::add-mask::$WONDE_KEY"
 
@@ -122,11 +132,16 @@ jobs:
             --filters "Name=group-name,Values=$PROJECT-worker-*" \
             --query 'SecurityGroups[0].GroupId' --output text)
 
+          # Optional window overrides (blank = the code's defaults).
+          EXTRA=""
+          [ -n "$RECENT_DAYS" ] && EXTRA="$EXTRA,\"--recent-days\",\"$RECENT_DAYS\""
+          [ -n "$MAX_PAGES" ] && EXTRA="$EXTRA,\"--max-pages\",\"$MAX_PAGES\""
+
           OVERRIDES=$(cat <<JSON
           {"containerOverrides":[{
             "name":"migrate",
             "command":["pnpm","--filter","@sentinel/sync","sync:sandbox:prod",
-              "--school-id","$SID","--slug","$SCHOOL_SLUG","--name","$SCHOOL_NAME"],
+              "--school-id","$SID","--slug","$SCHOOL_SLUG","--name","$SCHOOL_NAME"$EXTRA],
             "environment":[{"name":"WONDE_API_KEY","value":"$WONDE_KEY"}]
           }]}
           JSON
