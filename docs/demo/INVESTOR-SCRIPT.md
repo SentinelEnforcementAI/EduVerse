@@ -52,6 +52,16 @@ Strapline on screen: **"Every child. Seen. Safe. Supported."**
 - **Have a second tab** on `/dashboard/audit` and the Wonde connect screen so
   Act 4 and Act 5 don't stall on navigation.
 
+**The sandbox school — how to hold it.** The Wonde-connected school ("Wonde
+Sandbox School") is a live *test-data* connection: its **roll is real and live**,
+but its event data is generic MIS test data with no engineered safeguarding
+story, so any concerns on it are not the narrative. Drive Acts 1–4 on the
+**synthetic schools** (Downlands etc.) where the patterns are legible, and use
+the sandbox only in **Act 5** as the "it's real" proof — via the **Admin →
+Connect Wonde** screen and its live roll count. Don't drill into the sandbox
+school's own concern list on stage. (A full data-level tidy of that tenant is a
+safe follow-up; it isn't needed for the story.)
+
 **One honesty note you can volunteer if asked** (it builds credibility): the
 synthetic schools carry an *engineered* safeguarding story so the pattern is
 legible in a 10-minute demo; the connected Wonde school proves the *pipeline* on
