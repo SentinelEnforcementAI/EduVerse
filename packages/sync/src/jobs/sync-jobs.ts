@@ -264,10 +264,10 @@ export async function syncAttendance(
       }),
     );
   }
-  if (firstShape) {
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
     console.warn(
-      `[wonde] attendance pull: created=${stats.created} updated=${stats.updated} ` +
-        `skipped=${stats.skipped}; sample record ${firstShape}`,
+      `[wonde] all ${stats.skipped} attendance records skipped (pupil link or ` +
+        `empty/absent fields) — sample record ${firstShape}`,
     );
   }
   return stats;
@@ -343,10 +343,10 @@ export async function syncBehaviour(
       }),
     );
   }
-  if (firstShape) {
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
     console.warn(
-      `[wonde] behaviour pull: created=${stats.created} updated=${stats.updated} ` +
-        `skipped=${stats.skipped}; sample record ${firstShape}`,
+      `[wonde] all ${stats.skipped} behaviour records skipped (pupil link or ` +
+        `empty/absent fields) — sample record ${firstShape}`,
     );
   }
   return stats;

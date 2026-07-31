@@ -20,7 +20,9 @@
     "db:seed:prod": "tsx prisma/seed.ts",
     "app-role:prod": "tsx scripts/create-app-role.ts",
     "db:seed:demo": "dotenv -e ../../.env -- tsx scripts/seed-demo.ts",
-    "db:seed:demo:prod": "tsx scripts/seed-demo.ts"
+    "db:seed:demo:prod": "tsx scripts/seed-demo.ts",
+    "db:sandbox:admin": "dotenv -e ../../.env -- tsx scripts/sandbox-admin.ts",
+    "db:sandbox:admin:prod": "tsx scripts/sandbox-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2"
