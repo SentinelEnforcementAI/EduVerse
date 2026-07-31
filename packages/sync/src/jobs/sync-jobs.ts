@@ -46,16 +46,53 @@ async function pupilIdsByWondeId(tenantId: string): Promise<Map<string, string>>
   return new Map(pupils.map((p) => [p.wondeId!, p.id]));
 }
 
+// Field-presence shape of a student payload, for diagnosing why a real MIS's
+// students are being skipped — without logging any pupil-identifying values
+// (names, DOB, UPN). Booleans and structural keys only.
+function studentShape(student: WondeStudent): string {
+  const dob = student.date_of_birth;
+  return JSON.stringify({
+    keys: Object.keys(student),
+    hasForename: Boolean(student.forename),
+    hasSurname: Boolean(student.surname),
+    dobType: dob === null || dob === undefined ? "missing" : typeof dob,
+    dobKeys: dob && typeof dob === "object" ? Object.keys(dob) : undefined,
+    yearKeys: student.year ? Object.keys(student.year) : "missing",
+    yearDataKeys: student.year?.data ? Object.keys(student.year.data) : "missing",
+  });
+}
+
 export async function syncStudents(
   client: WondeClient,
   tenant: Tenant,
 ): Promise<SyncStats> {
   const stats = emptyStats();
+  // Attribute skips to a field so a 100%-skipped first pull is diagnosable
+  // against the real payload (see studentShape) rather than a silent 0 pupils.
+  const skipReasons = { noId: 0, noName: 0, noDob: 0, noYear: 0 };
+  let firstShape: string | null = null;
   for await (const page of client.students(tenant.wondeSchoolId!)) {
     for (const student of page) {
+      if (firstShape === null) firstShape = studentShape(student);
       const dateOfBirth = dateFrom(student.date_of_birth);
       const yearGroup = yearGroupFrom(student);
-      if (!student.id || !student.forename || !student.surname || !dateOfBirth || yearGroup === null) {
+      if (!student.id) {
+        skipReasons.noId += 1;
+        stats.skipped += 1;
+        continue;
+      }
+      if (!student.forename || !student.surname) {
+        skipReasons.noName += 1;
+        stats.skipped += 1;
+        continue;
+      }
+      if (!dateOfBirth) {
+        skipReasons.noDob += 1;
+        stats.skipped += 1;
+        continue;
+      }
+      if (yearGroup === null) {
+        skipReasons.noYear += 1;
         stats.skipped += 1;
         continue;
       }
@@ -87,6 +124,16 @@ export async function syncStudents(
         stats.created += 1;
       }
     }
+  }
+  // A first pull that skipped every student (0 created/updated) almost always
+  // means the real payload nests a required field differently than expected.
+  // Log the reason breakdown and one non-identifying shape sample so it is
+  // diagnosable without another blind round-trip.
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+    console.warn(
+      `[wonde] all ${stats.skipped} students skipped by mapper — reasons ` +
+        `${JSON.stringify(skipReasons)}; sample shape ${firstShape}`,
+    );
   }
   return stats;
 }
