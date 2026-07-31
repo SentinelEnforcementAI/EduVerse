@@ -1,0 +1,136 @@
+# One-click Wonde sandbox setup. Reads the sandbox key from the GitHub Actions
+# secret WONDE_SANDBOX_KEY (never an input — this repo is public, so a key in a
+# workflow input would be world-readable), stores it in Secrets Manager for the
+# app's nightly sync, lists the reachable sandbox schools, and — if a school id
+# is given (or exactly one is reachable) — connects it into the demo trust as a
+# live, engine-analysed school.
+#
+# Prerequisite: add a repository Actions secret named WONDE_SANDBOX_KEY.
+name: Set up Wonde sandbox
+
+on:
+  workflow_dispatch:
+    inputs:
+      wonde_school_id:
+        description: Sandbox school id (leave blank to just list schools)
+        required: false
+        default: ""
+      school_name:
+        description: Display name for the connected school
+        required: false
+        default: "Wonde Sandbox School"
+      school_slug:
+        description: URL slug for the connected school
+        required: false
+        default: "wonde-sandbox"
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Store key, discover, connect
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the sandbox key secret is set
+        env:
+          WONDE_KEY: ${{ secrets.WONDE_SANDBOX_KEY }}
+        run: |
+          if [ -z "$WONDE_KEY" ]; then
+            echo "Add a repository Actions secret named WONDE_SANDBOX_KEY (Settings ->"
+            echo "Secrets and variables -> Actions -> New repository secret), then re-run."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Store key, list schools, connect
+        env:
+          WONDE_KEY: ${{ secrets.WONDE_SANDBOX_KEY }}
+          SCHOOL_ID_IN: ${{ inputs.wonde_school_id }}
+          SCHOOL_NAME: ${{ inputs.school_name }}
+          SCHOOL_SLUG: ${{ inputs.school_slug }}
+        run: |
+          echo "::add-mask::$WONDE_KEY"
+
+          # 1. Persist the key so the app (nightly sync) has it too.
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/wonde-api-key" \
+            --secret-string "$WONDE_KEY" >/dev/null
+          echo "Stored the sandbox key in Secrets Manager."
+
+          # 2. List the schools the token can reach (runner has internet).
+          HTTP=$(curl -sS -o /tmp/schools.json -w "%{http_code}" \
+            -H "Authorization: Bearer $WONDE_KEY" -H "Accept: application/json" \
+            "https://api.wonde.com/v1.0/schools")
+          if [ "$HTTP" != "200" ]; then
+            echo "Wonde /schools returned HTTP $HTTP:"; cat /tmp/schools.json; exit 1
+          fi
+          echo "Reachable Wonde schools:"
+          jq -r '.data[] | "  id=\(.id)  name=\(.name // "?")"' /tmp/schools.json
+
+          # 3. Choose the school id: the input, or the only one if there is one.
+          SID="$SCHOOL_ID_IN"
+          if [ -z "$SID" ]; then
+            COUNT=$(jq '.data | length' /tmp/schools.json)
+            if [ "$COUNT" = "1" ]; then
+              SID=$(jq -r '.data[0].id' /tmp/schools.json)
+              echo "One school reachable; using $SID."
+            fi
+          fi
+          if [ -z "$SID" ]; then
+            echo "Key stored. Re-run this workflow with wonde_school_id set to one of the ids above to connect."
+            exit 0
+          fi
+
+          # 4. Connect + sync as a one-off task on the migrate (owner) task def.
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=$PROJECT-private-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=$PROJECT-worker-*" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          OVERRIDES=$(cat <<JSON
+          {"containerOverrides":[{
+            "name":"migrate",
+            "command":["pnpm","--filter","@sentinel/sync","sync:sandbox:prod",
+              "--school-id","$SID","--slug","$SCHOOL_SLUG","--name","$SCHOOL_NAME"],
+            "environment":[{"name":"WONDE_API_KEY","value":"$WONDE_KEY"}]
+          }]}
+          JSON
+          )
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$PROJECT" \
+            --task-definition "$PROJECT-migrate" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --overrides "$OVERRIDES" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Connect task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Connect failed (exit $EXIT_CODE) — check /ecs/$PROJECT/worker logs (migrate prefix)"
+            exit 1
+          fi
+
+          # 5. Refresh the worker so the nightly sync picks up the stored key.
+          aws ecs update-service --cluster "$PROJECT" --service worker \
+            --force-new-deployment >/dev/null
+          echo "Sandbox school '$SCHOOL_SLUG' connected and synced."
