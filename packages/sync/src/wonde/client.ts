@@ -26,10 +26,34 @@ export class WondeApiError extends Error {
   constructor(
     message: string,
     public readonly status?: number,
+    public readonly body?: string,
   ) {
     super(message);
     this.name = "WondeApiError";
   }
+}
+
+// Wonde validates the `include` list per endpoint and 400s the whole request if
+// any expansion is unknown for that school's MIS, e.g.
+//   {"error":"invalid_include","error_description":"registration_group"}
+// Different MIS platforms (and the sandbox) expose different vocabularies, so we
+// treat a richer include as best-effort: on invalid_include, drop the named
+// expansion and retry, rather than failing the entire sync. Returns the include
+// name to remove, or null if the 400 was something else.
+function invalidIncludeFrom(error: WondeApiError): string | null {
+  if (error.status !== 400 || !error.body) return null;
+  try {
+    const parsed = JSON.parse(error.body) as {
+      error?: string;
+      error_description?: string;
+    };
+    if (parsed.error === "invalid_include" && parsed.error_description) {
+      return parsed.error_description.trim();
+    }
+  } catch {
+    // Non-JSON body — fall through.
+  }
+  return null;
 }
 
 export class HttpWondeTransport implements WondeTransport {
@@ -54,6 +78,7 @@ export class HttpWondeTransport implements WondeTransport {
       throw new WondeApiError(
         `Wonde API ${response.status} on ${path}: ${body.slice(0, 300)}`,
         response.status,
+        body,
       );
     }
     return response.json();
@@ -63,16 +88,50 @@ export class HttpWondeTransport implements WondeTransport {
 export class WondeClient {
   constructor(private readonly transport: WondeTransport) {}
 
+  // Fetch one page, self-healing against invalid `include` expansions: if this
+  // school's MIS (or the sandbox) rejects an include, drop it and retry so the
+  // sync degrades to fewer fields instead of failing outright. Mutates the
+  // caller's params so the dropped include stays dropped for later pages too.
+  private async fetchPage(
+    path: string,
+    params: Record<string, string>,
+  ): Promise<unknown> {
+    for (;;) {
+      try {
+        return await this.transport.get(path, params);
+      } catch (error) {
+        if (!(error instanceof WondeApiError)) throw error;
+        const bad = invalidIncludeFrom(error);
+        const current = params.include;
+        if (!bad || !current) throw error;
+        const remaining = current
+          .split(",")
+          .map((part) => part.trim())
+          .filter((part) => part && part !== bad);
+        if (remaining.length === current.split(",").length) throw error;
+        if (remaining.length > 0) {
+          params.include = remaining.join(",");
+        } else {
+          delete params.include;
+        }
+        console.warn(
+          `[wonde] ${path}: dropping unsupported include "${bad}" and retrying`,
+        );
+      }
+    }
+  }
+
   private async *paginate<T>(
     path: string,
     params: Record<string, string> = {},
   ): AsyncGenerator<T[]> {
+    // Copied so include self-healing persists across pages without touching
+    // the caller's literal.
+    const query = { ...params };
     for (let page = 1; page <= MAX_PAGES; page++) {
-      const raw = (await this.transport.get(path, {
-        ...params,
-        per_page: String(PER_PAGE),
-        page: String(page),
-      })) as WondePage<T>;
+      query.per_page = String(PER_PAGE);
+      query.page = String(page);
+      const raw = (await this.fetchPage(path, query)) as WondePage<T>;
       if (!Array.isArray(raw.data)) {
         throw new WondeApiError(`Unexpected response shape on ${path}`);
       }

@@ -64,6 +64,16 @@ WONDE_API_KEY=... pnpm --filter @sentinel/sync sync:sandbox \
   --school-id <id> --name "Wonde Sandbox" --slug wonde-sandbox
 ```
 
+## Invalid includes self-heal
+
+Wonde validates the `include` list per endpoint and returns
+`400 invalid_include` for the whole request if any expansion is unknown for that
+school's MIS (the sandbox, for example, does not expose `registration_group` on
+students). The client tolerates this: on `invalid_include` it drops the named
+expansion and retries, logging `[wonde] …: dropping unsupported include "x"`, so
+the sync degrades to fewer fields instead of failing the connect. A dropped
+`registration_group` falls back to a readable `Yr N` label on the pupil.
+
 ## First-run verification
 
 The client and mappers follow Wonde's published v1.0 structure, but the exact

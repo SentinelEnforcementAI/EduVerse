@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { WondeClient, type WondeTransport } from "../src";
+import { WondeApiError, WondeClient, type WondeTransport } from "../src";
+import type { WondeStudent } from "../src/wonde/types";
 
 // The self-connect onboarding step lists the schools an access token can reach.
 // WondeClient.schools() must page through them all and return the flat list.
@@ -47,5 +48,74 @@ describe("WondeClient.schools", () => {
   it("returns an empty list when the token can reach no schools", async () => {
     const schools = await new WondeClient(new PagedSchoolsTransport([])).schools();
     expect(schools).toEqual([]);
+  });
+});
+
+// A school's MIS (and the Wonde sandbox) validates the `include` list and 400s
+// the whole request if any expansion is unknown for that platform. The client
+// must drop the offending include and retry, so the sync degrades to fewer
+// fields instead of failing outright — this is what unblocked the sandbox
+// connect (registration_group is not a valid include there).
+class InvalidIncludeTransport implements WondeTransport {
+  public readonly includeAttempts: (string | undefined)[] = [];
+  constructor(
+    private readonly rejected: string,
+    private readonly students: WondeStudent[],
+  ) {}
+
+  get(path: string, params: Record<string, string>): Promise<unknown> {
+    this.includeAttempts.push(params.include);
+    const includes = (params.include ?? "").split(",").filter(Boolean);
+    if (includes.includes(this.rejected)) {
+      return Promise.reject(
+        new WondeApiError(
+          `Wonde API 400 on ${path}`,
+          400,
+          JSON.stringify({
+            error: "invalid_include",
+            error_description: this.rejected,
+          }),
+        ),
+      );
+    }
+    return Promise.resolve({ data: this.students, meta: { pagination: { more: false } } });
+  }
+}
+
+describe("WondeClient include self-healing", () => {
+  it("drops an unsupported include and retries, still returning data", async () => {
+    const transport = new InvalidIncludeTransport("registration_group", [
+      {
+        id: "WS1",
+        forename: "Ada",
+        surname: "Lovelace",
+        date_of_birth: { date: "2012-03-04" },
+        year: { data: { code: 8 } },
+      },
+    ]);
+
+    const pages: WondeStudent[][] = [];
+    for await (const page of new WondeClient(transport).students("A1930499544")) {
+      pages.push(page);
+    }
+
+    // First attempt carries both includes and 400s; the retry drops the bad one.
+    expect(transport.includeAttempts[0]).toBe("year,registration_group");
+    expect(transport.includeAttempts[1]).toBe("year");
+    expect(pages.flat().map((s) => s.id)).toEqual(["WS1"]);
+  });
+
+  it("rethrows a 400 that is not an invalid_include", async () => {
+    const transport: WondeTransport = {
+      get: () =>
+        Promise.reject(
+          new WondeApiError("Wonde API 400", 400, JSON.stringify({ error: "bad_request" })),
+        ),
+    };
+    await expect(async () => {
+      for await (const _ of new WondeClient(transport).students("A1930499544")) {
+        // drain
+      }
+    }).rejects.toThrow(WondeApiError);
   });
 });

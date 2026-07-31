@@ -63,7 +63,9 @@ export async function syncStudents(
         firstName: student.forename,
         lastName: student.surname,
         yearGroup,
-        registrationGroup: student.registration_group?.data?.name ?? `${yearGroup}?`,
+        // Some MIS/the sandbox don't expose a registration group include; fall
+        // back to a readable year-based label rather than an "unknown" marker.
+        registrationGroup: student.registration_group?.data?.name ?? `Yr ${yearGroup}`,
         dateOfBirth,
       };
       const existing = await systemDb.pupil.findUnique({
