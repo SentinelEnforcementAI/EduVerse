@@ -78,6 +78,44 @@ describe("syncStudents", () => {
 
     await syncStudents(client, tenant); // restore
   });
+
+  it("ingests a student with no date of birth (sandbox/MIS omits it)", async () => {
+    // The Wonde sandbox returns date_of_birth: null for every pupil; DOB is
+    // optional, so the pupil must still be created (not skipped).
+    const noDobSchoolId = `A${run}-nodob`;
+    const noDobTenant = await systemDb.tenant.create({
+      data: {
+        name: `No-DOB ${run}`,
+        slug: `wonde-nodob-${run}`,
+        wondeSchoolId: noDobSchoolId,
+      },
+    });
+    const school = fixtureSchool();
+    school.students = [
+      {
+        id: "WSND1",
+        upi: `UPI-ND-${run}`,
+        forename: "Nora",
+        surname: "Doe",
+        date_of_birth: null,
+        year: { data: { code: 7 } },
+      },
+    ];
+    const noDobClient = new WondeClient(new FakeWondeTransport(noDobSchoolId, school));
+
+    try {
+      const stats = await syncStudents(noDobClient, noDobTenant);
+      expect(stats).toEqual({ created: 1, updated: 0, skipped: 0 });
+      const pupil = await systemDb.pupil.findUnique({
+        where: { tenantId_wondeId: { tenantId: noDobTenant.id, wondeId: "WSND1" } },
+      });
+      expect(pupil?.dateOfBirth).toBeNull();
+      expect(pupil?.yearGroup).toBe(7);
+    } finally {
+      await systemDb.pupil.deleteMany({ where: { tenantId: noDobTenant.id } });
+      await systemDb.tenant.delete({ where: { id: noDobTenant.id } });
+    }
+  });
 });
 
 describe("syncAttendance", () => {

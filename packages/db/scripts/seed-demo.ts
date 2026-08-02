@@ -100,8 +100,12 @@ async function main() {
   await seedDatabase({ pupilsPerSchool, months, log: () => process.stdout.write(".") });
   process.stdout.write("\n");
 
+  // Only the synthetic demo schools get the rules engine and seeded decisions.
+  // A Wonde-connected school (wondeSchoolId set) is a real live roll — the demo
+  // seed must never invent signals or decisions on it, or a reset would pollute
+  // the live connection with synthetic safeguarding flags.
   const schools = await systemDb.tenant.findMany({
-    where: { trustId: { not: null } },
+    where: { trustId: { not: null }, wondeSchoolId: null },
     orderBy: { name: "asc" },
   });
 

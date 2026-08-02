@@ -1,0 +1,129 @@
+# Inspect or tidy a Wonde-connected (sandbox) tenant on the live database.
+#
+#   report → print the tenant's data footprint: pupil roll, event-row counts
+#            and signals by rule + status. Read-only; safe to run anytime.
+#   clean  → remove the tenant's signals, rule runs and event data, KEEPING the
+#            pupil roll, users and the tenant itself, so a connected school shows
+#            a clean live roll with no synthetic engine noise. Only ever touches
+#            the one named tenant. Requires typing CLEAN to confirm.
+#
+# Runs as a one-off ECS task on the migrate (owner) task def, then prints that
+# task's log stream so the report/clean output is visible here. Never rebuilds
+# images or changes infrastructure.
+name: Sandbox tenant admin
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "report (read-only) or clean (wipe engine noise, keep roll)"
+        required: false
+        default: "report"
+      slug:
+        description: "Tenant slug to operate on"
+        required: false
+        default: "wonde-sandbox"
+      confirm:
+        description: "Type CLEAN to confirm a clean (ignored for report)"
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  admin:
+    name: Report or clean the sandbox tenant
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard clean with a confirmation
+        run: |
+          if [ "${{ inputs.mode }}" = "clean" ] && [ "${{ inputs.confirm }}" != "CLEAN" ]; then
+            echo "mode=clean needs confirm=CLEAN. Nothing was changed."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Realign owner DB secret with the current master password
+        run: |
+          # The task runs on the owner (migrate) task def; keep its credentials
+          # current against the AWS-managed, rotating master secret.
+          MASTER_ARN=$(aws rds describe-db-instances --db-instance-identifier "$PROJECT-db" \
+            --query 'DBInstances[0].MasterUserSecret.SecretArn' --output text)
+          ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier "$PROJECT-db" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)
+          CREDS=$(aws secretsmanager get-secret-value --secret-id "$MASTER_ARN" \
+            --query SecretString --output text)
+          DB_USER=$(echo "$CREDS" | jq -r .username)
+          DB_PASS=$(echo "$CREDS" | jq -r '.password | @uri')
+          echo "::add-mask::$DB_PASS"
+          aws secretsmanager put-secret-value \
+            --secret-id "$PROJECT/database-url-owner" \
+            --secret-string "postgresql://$DB_USER:$DB_PASS@$ENDPOINT:5432/sentinel_watch" >/dev/null
+          echo "Owner DB secret realigned."
+
+      - name: Run sandbox-admin (one-off task, owner role)
+        env:
+          MODE: ${{ inputs.mode }}
+          SLUG: ${{ inputs.slug }}
+        run: |
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=$PROJECT-private-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=$PROJECT-worker-*" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          OVERRIDES=$(cat <<JSON
+          {"containerOverrides":[{
+            "name":"migrate",
+            "command":["pnpm","--filter","@sentinel/db","db:sandbox:admin:prod",
+              "--mode","$MODE","--slug","$SLUG"]
+          }]}
+          JSON
+          )
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$PROJECT" \
+            --task-definition "$PROJECT-migrate" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --overrides "$OVERRIDES" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Admin task: $TASK_ARN"
+          TASK_ID="${TASK_ARN##*/}"
+
+          aws ecs wait tasks-stopped --cluster "$PROJECT" --tasks "$TASK_ARN"
+
+          # Print the task's own log stream so the report/clean output shows here.
+          # awslogs stream name = <streamPrefix>/<container>/<task-id> = migrate/migrate/<id>
+          echo "================ task output ($MODE, slug=$SLUG) ================"
+          aws logs get-log-events \
+            --log-group-name "/ecs/$PROJECT/worker" \
+            --log-stream-name "migrate/migrate/$TASK_ID" \
+            --start-from-head \
+            --query 'events[].message' --output text | tr '\t' '\n' || \
+            echo "(could not read log stream migrate/migrate/$TASK_ID — check /ecs/$PROJECT/worker)"
+          echo "==============================================================="
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$PROJECT" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "sandbox-admin failed (exit $EXIT_CODE) — check /ecs/$PROJECT/worker logs (migrate prefix)"
+            exit 1
+          fi
+          echo "sandbox-admin ($MODE) complete for slug=$SLUG."

@@ -1,6 +1,6 @@
 import { systemDb, type SyncType, type Tenant } from "@sentinel/db";
 
-import type { WondeClient } from "../wonde/client";
+import type { WondeClient, WondeWindow } from "../wonde/client";
 import type {
   WondeBehaviour,
   WondeResult,
@@ -21,6 +21,68 @@ export type SyncStats = {
 
 function emptyStats(): SyncStats {
   return { created: 0, updated: 0, skipped: 0 };
+}
+
+function addStats(into: SyncStats, from: SyncStats): void {
+  into.created += from.created;
+  into.updated += from.updated;
+  into.skipped += from.skipped;
+}
+
+// A row to upsert, keyed by its Wonde-derived source id.
+type SourcedRow = { sourceId: string; data: Record<string, unknown> };
+
+// Persist a batch of rows keyed by (tenant_id, source_id) with a fixed, small
+// number of round-trips instead of two per row: one findMany to load the
+// existing rows, one createMany for the new ones, and per-row updates only
+// where a field actually changed. A full-school register is tens of thousands
+// of rows — row-at-a-time upserts take tens of minutes and don't scale to a
+// MAT; batching brings it down to seconds. createMany(skipDuplicates) also
+// absorbs secondary-unique collisions (e.g. a repeated pupil/date/session in
+// the feed) without aborting the batch.
+async function upsertBatch<E extends { id: string; sourceId: string | null }>(
+  rows: SourcedRow[],
+  ops: {
+    findExisting: (sourceIds: string[]) => Promise<E[]>;
+    createMany: (data: Record<string, unknown>[]) => Promise<{ count: number }>;
+    update: (id: string, data: Record<string, unknown>) => Promise<unknown>;
+    changed: (existing: E, data: Record<string, unknown>) => boolean;
+    tenantId: string;
+  },
+): Promise<SyncStats> {
+  const stats = emptyStats();
+  if (rows.length === 0) return stats;
+
+  // Dedupe within the batch by source id (feeds can repeat a record); keep the
+  // last occurrence so the newest wins.
+  const bySource = new Map(rows.map((row) => [row.sourceId, row]));
+  const existing = await ops.findExisting([...bySource.keys()]);
+  const existingBySource = new Map(existing.map((e) => [e.sourceId, e]));
+
+  const toCreate: Record<string, unknown>[] = [];
+  for (const row of bySource.values()) {
+    const found = existingBySource.get(row.sourceId);
+    if (!found) {
+      toCreate.push({ tenantId: ops.tenantId, sourceId: row.sourceId, ...row.data });
+    } else {
+      // Present already — count as reconciled; only write if a field changed.
+      if (ops.changed(found, row.data)) await ops.update(found.id, row.data);
+      stats.updated += 1;
+    }
+  }
+  if (toCreate.length > 0) {
+    const { count } = await ops.createMany(toCreate);
+    stats.created += count;
+    // Rows a secondary unique rejected (e.g. duplicate pupil/date/session).
+    stats.skipped += toCreate.length - count;
+  }
+  return stats;
+}
+
+function sameDate(a: Date | string | null, b: unknown): boolean {
+  if (!(b instanceof Date)) return false;
+  const av = a instanceof Date ? a.getTime() : a ? new Date(a).getTime() : NaN;
+  return av === b.getTime();
 }
 
 function dateFrom(value: { date?: string | null } | string | null | undefined): Date | null {
@@ -46,16 +108,59 @@ async function pupilIdsByWondeId(tenantId: string): Promise<Map<string, string>>
   return new Map(pupils.map((p) => [p.wondeId!, p.id]));
 }
 
+// Field-presence shape of a student payload, for diagnosing why a real MIS's
+// students are being skipped — without logging any pupil-identifying values
+// (names, DOB, UPN). Booleans and structural keys only.
+function studentShape(student: WondeStudent): string {
+  const dob = student.date_of_birth;
+  return JSON.stringify({
+    keys: Object.keys(student),
+    hasForename: Boolean(student.forename),
+    hasSurname: Boolean(student.surname),
+    dobType: dob === null || dob === undefined ? "missing" : typeof dob,
+    dobKeys: dob && typeof dob === "object" ? Object.keys(dob) : undefined,
+    yearKeys: student.year ? Object.keys(student.year) : "missing",
+    yearDataKeys: student.year?.data ? Object.keys(student.year.data) : "missing",
+  });
+}
+
+// A sample of a raw record for diagnosing why a domain's rows are being skipped
+// (usually pupil resolution or a differently-nested field). The Wonde sandbox is
+// synthetic test data (no real pupils), so a truncated JSON sample is safe and
+// is the fastest way to see the real field layout and correct the mapping.
+// DIAGNOSTIC: only used on the sandbox/test connection.
+function recordShape(record: Record<string, unknown>): string {
+  return JSON.stringify(record).slice(0, 900);
+}
+
 export async function syncStudents(
   client: WondeClient,
   tenant: Tenant,
 ): Promise<SyncStats> {
   const stats = emptyStats();
+  // Attribute skips to a field so a 100%-skipped first pull is diagnosable
+  // against the real payload (see studentShape) rather than a silent 0 pupils.
+  // Date of birth is optional (the sandbox and some MIS omit it, and the rules
+  // engine doesn't use it) — a pupil needs an id, a name and a year group.
+  const skipReasons = { noId: 0, noName: 0, noYear: 0 };
+  let firstShape: string | null = null;
   for await (const page of client.students(tenant.wondeSchoolId!)) {
     for (const student of page) {
+      if (firstShape === null) firstShape = studentShape(student);
       const dateOfBirth = dateFrom(student.date_of_birth);
       const yearGroup = yearGroupFrom(student);
-      if (!student.id || !student.forename || !student.surname || !dateOfBirth || yearGroup === null) {
+      if (!student.id) {
+        skipReasons.noId += 1;
+        stats.skipped += 1;
+        continue;
+      }
+      if (!student.forename || !student.surname) {
+        skipReasons.noName += 1;
+        stats.skipped += 1;
+        continue;
+      }
+      if (yearGroup === null) {
+        skipReasons.noYear += 1;
         stats.skipped += 1;
         continue;
       }
@@ -63,7 +168,9 @@ export async function syncStudents(
         firstName: student.forename,
         lastName: student.surname,
         yearGroup,
-        registrationGroup: student.registration_group?.data?.name ?? `${yearGroup}?`,
+        // Some MIS/the sandbox don't expose a registration group include; fall
+        // back to a readable year-based label rather than an "unknown" marker.
+        registrationGroup: student.registration_group?.data?.name ?? `Yr ${yearGroup}`,
         dateOfBirth,
       };
       const existing = await systemDb.pupil.findUnique({
@@ -86,18 +193,32 @@ export async function syncStudents(
       }
     }
   }
+  // A first pull that skipped every student (0 created/updated) almost always
+  // means the real payload nests a required field differently than expected.
+  // Log the reason breakdown and one non-identifying shape sample so it is
+  // diagnosable without another blind round-trip.
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+    console.warn(
+      `[wonde] all ${stats.skipped} students skipped by mapper — reasons ` +
+        `${JSON.stringify(skipReasons)}; sample shape ${firstShape}`,
+    );
+  }
   return stats;
 }
 
 export async function syncAttendance(
   client: WondeClient,
   tenant: Tenant,
+  window: WondeWindow = {},
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
+  let firstShape: string | null = null;
 
-  for await (const page of client.sessionAttendance(tenant.wondeSchoolId!)) {
+  for await (const page of client.sessionAttendance(tenant.wondeSchoolId!, window)) {
+    const rows: SourcedRow[] = [];
     for (const record of page) {
+      if (firstShape === null) firstShape = recordShape(record as Record<string, unknown>);
       const studentId = record.student?.data?.id ?? record.student_id;
       const pupilId = studentId ? pupilIds.get(studentId) : undefined;
       const date = dateFrom(record.date ?? null);
@@ -110,38 +231,44 @@ export async function syncAttendance(
       const present =
         record.attendance_code?.is_present ?? (code === "/" || code === "L");
       const authorised = record.attendance_code?.is_authorised ?? present;
-
-      const existing = await systemDb.attendanceRecord.findUnique({
-        where: { tenantId_sourceId: { tenantId: tenant.id, sourceId: record.id } },
-        select: { id: true },
-      });
-      try {
-        if (existing) {
-          await systemDb.attendanceRecord.update({
-            where: { id: existing.id },
-            data: { pupilId, date, session, code, present, authorised },
-          });
-          stats.updated += 1;
-        } else {
-          await systemDb.attendanceRecord.create({
-            data: {
-              tenantId: tenant.id,
-              sourceId: record.id,
-              pupilId,
-              date,
-              session,
-              code,
-              present,
-              authorised,
-            },
-          });
-          stats.created += 1;
-        }
-      } catch {
-        // Unique collision (e.g. duplicate pupil/date/session in feed).
-        stats.skipped += 1;
-      }
+      rows.push({ sourceId: record.id, data: { pupilId, date, session, code, present, authorised } });
     }
+    addStats(
+      stats,
+      await upsertBatch(rows, {
+        tenantId: tenant.id,
+        findExisting: (sourceIds) =>
+          systemDb.attendanceRecord.findMany({
+            where: { tenantId: tenant.id, sourceId: { in: sourceIds } },
+            select: {
+              id: true,
+              sourceId: true,
+              pupilId: true,
+              date: true,
+              session: true,
+              code: true,
+              present: true,
+              authorised: true,
+            },
+          }),
+        createMany: (data) =>
+          systemDb.attendanceRecord.createMany({ data: data as never, skipDuplicates: true }),
+        update: (id, data) => systemDb.attendanceRecord.update({ where: { id }, data }),
+        changed: (e, d) =>
+          e.pupilId !== d.pupilId ||
+          !sameDate(d.date as Date, e.date) ||
+          e.session !== d.session ||
+          e.code !== d.code ||
+          e.present !== d.present ||
+          e.authorised !== d.authorised,
+      }),
+    );
+  }
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+    console.warn(
+      `[wonde] all ${stats.skipped} attendance records skipped (pupil link or ` +
+        `empty/absent fields) — sample record ${firstShape}`,
+    );
   }
   return stats;
 }
@@ -152,12 +279,16 @@ const SEVERITY_BY_POINTS = (points: number | null | undefined): number =>
 export async function syncBehaviour(
   client: WondeClient,
   tenant: Tenant,
+  window: WondeWindow = {},
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
+  let firstShape: string | null = null;
 
-  for await (const page of client.behaviours(tenant.wondeSchoolId!)) {
+  for await (const page of client.behaviours(tenant.wondeSchoolId!, window)) {
+    const rows: SourcedRow[] = [];
     for (const behaviour of page) {
+      if (firstShape === null) firstShape = recordShape(behaviour as Record<string, unknown>);
       const date = dateFrom(behaviour.date ?? null);
       const students = behaviour.students?.data ?? [];
       if (!behaviour.id || !date || students.length === 0) {
@@ -171,29 +302,52 @@ export async function syncBehaviour(
           continue;
         }
         // One incident row per involved pupil.
-        const sourceId = `${behaviour.id}:${student.id}`;
-        const data = {
-          pupilId,
-          date,
-          category: behaviour.kind?.toLowerCase() ?? "other",
-          severity: SEVERITY_BY_POINTS(behaviour.points),
-          description: behaviour.comment ?? "",
-        };
-        const existing = await systemDb.behaviourIncident.findUnique({
-          where: { tenantId_sourceId: { tenantId: tenant.id, sourceId } },
-          select: { id: true },
+        rows.push({
+          sourceId: `${behaviour.id}:${student.id}`,
+          data: {
+            pupilId,
+            date,
+            category: behaviour.kind?.toLowerCase() ?? "other",
+            severity: SEVERITY_BY_POINTS(behaviour.points),
+            description: behaviour.comment ?? "",
+          },
         });
-        if (existing) {
-          await systemDb.behaviourIncident.update({ where: { id: existing.id }, data });
-          stats.updated += 1;
-        } else {
-          await systemDb.behaviourIncident.create({
-            data: { ...data, tenantId: tenant.id, sourceId },
-          });
-          stats.created += 1;
-        }
       }
     }
+    addStats(
+      stats,
+      await upsertBatch(rows, {
+        tenantId: tenant.id,
+        findExisting: (sourceIds) =>
+          systemDb.behaviourIncident.findMany({
+            where: { tenantId: tenant.id, sourceId: { in: sourceIds } },
+            select: {
+              id: true,
+              sourceId: true,
+              pupilId: true,
+              date: true,
+              category: true,
+              severity: true,
+              description: true,
+            },
+          }),
+        createMany: (data) =>
+          systemDb.behaviourIncident.createMany({ data: data as never, skipDuplicates: true }),
+        update: (id, data) => systemDb.behaviourIncident.update({ where: { id }, data }),
+        changed: (e, d) =>
+          e.pupilId !== d.pupilId ||
+          !sameDate(d.date as Date, e.date) ||
+          e.category !== d.category ||
+          e.severity !== d.severity ||
+          e.description !== d.description,
+      }),
+    );
+  }
+  if (stats.created === 0 && stats.updated === 0 && stats.skipped > 0) {
+    console.warn(
+      `[wonde] all ${stats.skipped} behaviour records skipped (pupil link or ` +
+        `empty/absent fields) — sample record ${firstShape}`,
+    );
   }
   return stats;
 }
@@ -201,11 +355,13 @@ export async function syncBehaviour(
 export async function syncAttainment(
   client: WondeClient,
   tenant: Tenant,
+  window: WondeWindow = {},
 ): Promise<SyncStats> {
   const stats = emptyStats();
   const pupilIds = await pupilIdsByWondeId(tenant.id);
 
-  for await (const page of client.results(tenant.wondeSchoolId!)) {
+  for await (const page of client.results(tenant.wondeSchoolId!, window)) {
+    const rows: SourcedRow[] = [];
     for (const result of page) {
       const studentId = result.student?.data?.id ?? result.student_id;
       const pupilId = studentId ? pupilIds.get(studentId) : undefined;
@@ -217,25 +373,37 @@ export async function syncAttainment(
         stats.skipped += 1;
         continue;
       }
-      const data = { pupilId, subject, assessedAt, score: Math.round(score) };
-      const existing = await systemDb.attainmentRecord.findUnique({
-        where: { tenantId_sourceId: { tenantId: tenant.id, sourceId: result.id } },
-        select: { id: true },
+      rows.push({
+        sourceId: result.id,
+        data: { pupilId, subject, assessedAt, score: Math.round(score) },
       });
-      try {
-        if (existing) {
-          await systemDb.attainmentRecord.update({ where: { id: existing.id }, data });
-          stats.updated += 1;
-        } else {
-          await systemDb.attainmentRecord.create({
-            data: { ...data, tenantId: tenant.id, sourceId: result.id },
-          });
-          stats.created += 1;
-        }
-      } catch {
-        stats.skipped += 1;
-      }
     }
+    addStats(
+      stats,
+      await upsertBatch(rows, {
+        tenantId: tenant.id,
+        findExisting: (sourceIds) =>
+          systemDb.attainmentRecord.findMany({
+            where: { tenantId: tenant.id, sourceId: { in: sourceIds } },
+            select: {
+              id: true,
+              sourceId: true,
+              pupilId: true,
+              subject: true,
+              assessedAt: true,
+              score: true,
+            },
+          }),
+        createMany: (data) =>
+          systemDb.attainmentRecord.createMany({ data: data as never, skipDuplicates: true }),
+        update: (id, data) => systemDb.attainmentRecord.update({ where: { id }, data }),
+        changed: (e, d) =>
+          e.pupilId !== d.pupilId ||
+          e.subject !== d.subject ||
+          !sameDate(d.assessedAt as Date, e.assessedAt) ||
+          e.score !== d.score,
+      }),
+    );
   }
   return stats;
 }

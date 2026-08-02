@@ -64,6 +64,42 @@ WONDE_API_KEY=... pnpm --filter @sentinel/sync sync:sandbox \
   --school-id <id> --name "Wonde Sandbox" --slug wonde-sandbox
 ```
 
+## Invalid includes self-heal
+
+Wonde validates the `include` list per endpoint and returns
+`400 invalid_include` for the whole request if any expansion is unknown for that
+school's MIS (the sandbox, for example, does not expose `registration_group` on
+students). The client tolerates this: on `invalid_include` it drops the named
+expansion and retries, logging `[wonde] …: dropping unsupported include "x"`, so
+the sync degrades to fewer fields instead of failing the connect. A dropped
+`registration_group` falls back to a readable `Yr N` label on the pupil.
+
+## Unavailable domains self-heal (and how to fill them in)
+
+A school's MIS may not expose every data domain to the token: Wonde returns
+`403 invalid_permissions` (`"Scope attendance.read not enabled"`) when the app is
+not granted a **data scope**, or `404 resource_not_found` when the **resource
+does not exist** for that school (e.g. no assessment module answering
+`/results`). The connect treats each data domain (students, attendance,
+behaviour, attainment) as best-effort: if a domain is unavailable for either
+reason, it is **skipped** and the connect still succeeds with the domains that
+are — a school with only a roll is still a connected school. The run reports what
+it skipped, e.g.:
+
+```
+Skipped (Wonde scope not enabled for this token/school):
+  attendance (Scope attendance.read not enabled);
+  attainment (Resource not found).
+```
+
+The **risk engine needs attendance, behaviour and attainment** to raise signals,
+so for a data-rich sandbox demo, enable those scopes on the Wonde application
+(Wonde dashboard → the app's data scopes: `attendance.read`, `behaviour.read`,
+`assessment.read`/results) and re-run the connect — it is idempotent and will
+backfill the newly-permitted data. Students-only is enough to prove the live
+roll and the pipeline; the synthetic Weald schools carry the engineered risk
+narrative in the meantime.
+
 ## First-run verification
 
 The client and mappers follow Wonde's published v1.0 structure, but the exact
@@ -79,14 +115,25 @@ On the first sandbox pull, check the reported counts:
 Any correction lives in the job mapping functions
 (`packages/sync/src/jobs/sync-jobs.ts`) — callers do not change.
 
+## First-pull window (attendance/behaviour/attainment)
+
+A full school's entire attendance history is hundreds of thousands of rows, so
+the connect does **not** pull all of it on the first run. The event-data
+collections are windowed: only records Wonde reports as updated in the last
+~400 days (`updated_after`), and at most a capped number of pages, so the connect
+always completes in bounded time. The rules engine only looks at recent windows,
+so a recent slice is what it needs anyway. Tune via `syncSandboxSchool`'s
+`recentDays` / `maxPages` (0 on either disables that bound and pulls everything —
+slow on a full roll). The pupil roll itself is always pulled in full.
+
 ## Ongoing sync
 
 For the MVP, re-running the connect workflow refreshes the school (idempotent).
 For continuous sync, the nightly job path (`@sentinel/sync` worker + queue) runs
-per linked tenant. **Enhancement for scale:** pass Wonde's `updated_after` URL
-parameter so the nightly job pulls only what changed rather than the full set —
-add it to the `WondeClient` methods and thread the last-synced watermark from
-`sync_runs`.
+per linked tenant. The `WondeClient` event-data methods already accept an
+`updatedAfter` window; **enhancement for scale:** thread the last-synced
+watermark from `sync_runs` into it so the nightly job advances incrementally
+from the previous run rather than re-pulling the window each night.
 
 ## Real schools (post-DPA)
 
