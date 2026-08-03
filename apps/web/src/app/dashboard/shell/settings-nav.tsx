@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Settings, type LucideIcon } from "lucide-react";
+import { ChevronDown, Settings } from "lucide-react";
 
+// The icon arrives already rendered (a ReactNode), not as a component function.
+// A Server Component cannot pass a function — a Lucide icon component is one —
+// across the boundary into this Client Component; doing so throws "Functions
+// cannot be passed directly to Client Components". So the server-side Sidebar
+// renders each icon to an element first and hands us the element.
 export type SettingsItem = {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: ReactNode;
   match?: string;
 };
 
@@ -44,7 +49,6 @@ export function SettingsNav({ items }: { items: SettingsItem[] }) {
       {open ? (
         <ul className="mt-0.5 space-y-0.5 pl-3">
           {items.map((item) => {
-            const Icon = item.icon;
             const active = isActive(item);
             return (
               <li key={item.href}>
@@ -57,7 +61,7 @@ export function SettingsNav({ items }: { items: SettingsItem[] }) {
                       : "text-muted-foreground hover:bg-paper hover:text-ink"
                   }`}
                 >
-                  <Icon className="size-[18px] shrink-0" aria-hidden />
+                  {item.icon}
                   {item.label}
                 </Link>
               </li>

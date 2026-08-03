@@ -5,7 +5,7 @@ import { BrandLockup } from "@/components/brand";
 
 import { NavLink } from "./nav-link";
 import { ProfileMenu, type Workspace } from "./profile-menu";
-import { SettingsNav, type SettingsItem } from "./settings-nav";
+import { SettingsNav } from "./settings-nav";
 
 export type NavItem = {
   href: string;
@@ -33,7 +33,10 @@ export function Sidebar({
 }: {
   nav: NavItem[];
   // Administrative / configuration surfaces, grouped under a Settings entry.
-  settings: SettingsItem[];
+  // Icons arrive as components and are rendered to elements here (this is a
+  // Server Component) before being handed to the client SettingsNav — a
+  // function prop cannot cross the server/client boundary.
+  settings: NavItem[];
   quickActions: QuickAction[];
   name: string;
   roleLabel: string;
@@ -106,7 +109,19 @@ export function Sidebar({
           </ul>
         </div>
 
-        {settings.length ? <SettingsNav items={settings} /> : null}
+        {settings.length ? (
+          <SettingsNav
+            items={settings.map((item) => {
+              const Icon = item.icon;
+              return {
+                href: item.href,
+                label: item.label,
+                match: item.match,
+                icon: <Icon className="size-[18px] shrink-0" aria-hidden />,
+              };
+            })}
+          />
+        ) : null}
 
         <Link
           href="/dashboard/governance"
