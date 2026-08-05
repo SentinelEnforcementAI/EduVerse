@@ -6,6 +6,7 @@ import { caseworkRouter } from "@/server/api/routers/casework";
 import { cohortRouter } from "@/server/api/routers/cohort";
 import { documentsRouter } from "@/server/api/routers/documents";
 import { healthRouter } from "@/server/api/routers/health";
+import { insightsRouter } from "@/server/api/routers/insights";
 import { inspectionRouter } from "@/server/api/routers/inspection";
 import { intakeRouter } from "@/server/api/routers/intake";
 import { kcsieRouter } from "@/server/api/routers/kcsie";
@@ -34,6 +35,7 @@ export const appRouter = createTRPCRouter({
   kcsie: kcsieRouter,
   inspection: inspectionRouter,
   cohort: cohortRouter,
+  insights: insightsRouter,
   search: searchRouter,
   admin: adminRouter,
   wonde: wondeRouter,

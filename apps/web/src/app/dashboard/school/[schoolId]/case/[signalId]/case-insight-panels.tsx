@@ -79,17 +79,16 @@ export function RiskFactorBreakdown({
       </p>
       <Card className="mt-3 divide-y divide-cloud p-0">
         {factors.map((f) => (
-          <div key={f.domain} className="flex gap-4 p-4">
-            <div className="w-32 shrink-0">
-              <div className="text-sm font-semibold">{f.domain}</div>
-              <div className="mt-1">
-                <LevelChip level={f.level} />
-              </div>
+          <div key={f.domain} className="p-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <span className="text-sm font-semibold">{f.domain}</span>
+              <LevelChip level={f.level} />
             </div>
-            <ul className="min-w-0 flex-1 space-y-1 pt-0.5">
+            <ul className="mt-2 space-y-1">
               {f.evidence.map((e, i) => (
-                <li key={i} className="text-sm text-muted-foreground">
-                  {e}
+                <li key={i} className="flex gap-2 text-sm text-muted-foreground">
+                  <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-muted-foreground/50" />
+                  <span className="min-w-0">{e}</span>
                 </li>
               ))}
             </ul>
