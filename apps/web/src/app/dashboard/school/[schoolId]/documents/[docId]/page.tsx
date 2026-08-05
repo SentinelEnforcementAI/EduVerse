@@ -66,7 +66,25 @@ export default async function DocumentViewerPage({
         <DownloadButton title={doc.title} content={doc.content} />
       </div>
 
+      {/* A styled, sealed rendering of the document, when one is held. The
+          plain-text content below remains the searchable source of record. */}
+      {doc.imageDataUrl ? (
+        <Card className="mx-auto mt-6 max-w-3xl overflow-hidden p-2 sm:p-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={doc.imageDataUrl}
+            alt={`${doc.title} (sealed document)`}
+            className="h-auto w-full rounded-md"
+          />
+        </Card>
+      ) : null}
+
       <Card className="mx-auto mt-6 max-w-3xl p-8">
+        {doc.imageDataUrl ? (
+          <p className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Document text
+          </p>
+        ) : null}
         <pre className="whitespace-pre-wrap font-sans text-[15px] leading-7 text-ink">
           {doc.content}
         </pre>

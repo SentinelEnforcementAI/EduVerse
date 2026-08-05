@@ -433,6 +433,10 @@ model Document {
   themes    String[]
   summary   String
   content   String
+  // Optional rendered image of the document (a data: URL). Demo case documents
+  // carry a styled, sealed image shown in the reader alongside the text; the
+  // text remains the searchable, sealed-by-construction source of record.
+  imageDataUrl String?    @map("image_data_url")
   generated Boolean       @default(false)
   source    String?
   createdAt DateTime      @default(now()) @map("created_at")

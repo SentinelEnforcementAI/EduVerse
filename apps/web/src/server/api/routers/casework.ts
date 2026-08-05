@@ -396,6 +396,17 @@ export const caseworkRouter = createTRPCRouter({
           where: { pupilId: signal.pupilId, scope: "CASE" },
           orderBy: { docDate: "desc" },
           take: 50,
+          // Never load the (large) image blob into the list; the reader fetches
+          // it per document. Selecting keeps the case payload lean.
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+            docDate: true,
+            summary: true,
+            signalId: true,
+          },
         }),
         db.caseTask.findMany({
           where: { signalId: signal.id },

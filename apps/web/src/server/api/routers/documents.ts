@@ -223,6 +223,9 @@ export const documentsRouter = createTRPCRouter({
         docDate: doc.docDate,
         themes: doc.themes,
         content: doc.content,
+        // A styled, sealed rendering of the document, shown in the reader above
+        // the text. Only present for documents that carry one (demo cases).
+        imageDataUrl: doc.imageDataUrl,
       };
     }),
 
