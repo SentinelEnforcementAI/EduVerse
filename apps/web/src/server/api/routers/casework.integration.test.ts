@@ -188,4 +188,52 @@ describe("casework.case", () => {
       caller.casework.case({ signalId: signalAId, schoolId: otherSchoolId }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  it("returns non-identifying context while sealed, but the snapshot only once revealed", async () => {
+    const signalId = await seedSignal(schoolAId, "ctx", 3);
+    const sig = await systemDb.signal.findUnique({
+      where: { id: signalId },
+      select: { pupilId: true },
+    });
+    await systemDb.pupil.update({
+      where: { id: sig!.pupilId },
+      data: {
+        pupilPremium: true,
+        freeSchoolMeals: true,
+        senStatus: "EHCP",
+        youngCarer: true,
+        preferredName: "Sealedname",
+        firstLanguage: "Polish",
+        house: "Rivers",
+      },
+    });
+
+    const caller = createCaller(await ctxFor(dsl));
+
+    // Sealed: the statutory context is present (it does not identify the child),
+    // but no personal snapshot leaves the server.
+    const sealed = await caller.casework.case({ signalId });
+    expect(sealed.revealed).toBe(false);
+    expect(sealed.context.pupilPremium).toBe(true);
+    expect(sealed.context.senStatus).toBe("EHCP");
+    expect(sealed.context.youngCarer).toBe(true);
+    expect(sealed.snapshot).toBeNull();
+    // The identifying snapshot values must not appear anywhere while sealed.
+    expect(JSON.stringify(sealed)).not.toContain("Sealedname");
+    expect(JSON.stringify(sealed)).not.toContain("Polish");
+    // A serious/level-3 case produces a domain risk-factor breakdown.
+    expect(sealed.riskFactors.length).toBeGreaterThan(0);
+    expect(sealed.lifecycle[0]!.key).toBe("raised");
+
+    // After a recorded reveal, the snapshot is returned; context is unchanged.
+    await caller.casework.reveal({
+      signalId,
+      reason: "Safeguarding decision recorded",
+    });
+    const revealed = await caller.casework.case({ signalId });
+    expect(revealed.revealed).toBe(true);
+    expect(revealed.snapshot?.preferredName).toBe("Sealedname");
+    expect(revealed.snapshot?.firstLanguage).toBe("Polish");
+    expect(revealed.context.pupilPremium).toBe(true);
+  });
 });

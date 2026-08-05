@@ -38,6 +38,27 @@ export type GeneratedAttainment = {
   score: number;
 };
 
+// Statutory vulnerability markers + personal snapshot a DSL reads alongside a
+// case. In production these come from the MIS via Wonde; here they are drawn
+// from a separate deterministic stream so the attendance/behaviour/attainment
+// series (and therefore which signals fire) are completely unaffected.
+export type PupilProfile = {
+  preferredName: string | null;
+  sex: string | null;
+  admissionDate: Date;
+  house: string;
+  firstLanguage: string;
+  ethnicity: string;
+  pupilPremium: boolean;
+  freeSchoolMeals: boolean;
+  senStatus: string | null;
+  eal: boolean;
+  lookedAfter: boolean;
+  youngCarer: boolean;
+  serviceChild: boolean;
+  medicalNeeds: string | null;
+};
+
 export type GeneratedPupil = {
   upn: string;
   firstName: string;
@@ -49,7 +70,7 @@ export type GeneratedPupil = {
   attendance: GeneratedAttendance[];
   behaviour: GeneratedBehaviour[];
   attainment: GeneratedAttainment[];
-};
+} & PupilProfile;
 
 export type SchoolConfig = {
   schoolSlug: string;
@@ -122,6 +143,77 @@ const BEHAVIOUR_CATEGORIES: Record<string, string[]> = {
 };
 
 const SUBJECTS = ["English", "Maths", "Science"];
+
+const HOUSES = ["Rivers", "Downs", "Weald", "Cliff"];
+// A short, representative spread. Weighted towards "White British" to mirror a
+// typical South-East England intake, with a realistic tail.
+const ETHNICITIES = [
+  "White British", "White British", "White British", "White British",
+  "White Other", "Asian British — Indian", "Asian British — Pakistani",
+  "Black British — African", "Mixed — White and Black Caribbean",
+  "Any other ethnic group",
+];
+const EAL_LANGUAGES = [
+  "Polish", "Urdu", "Romanian", "Portuguese", "Bengali", "Arabic", "Panjabi",
+];
+const MEDICAL_LABELS = [
+  "Asthma", "Type 1 diabetes", "Epilepsy", "Severe nut allergy",
+  "ADHD (medicated)", "Anaphylaxis — EpiPen",
+];
+
+// Draw a pupil's statutory-context markers and personal snapshot from a
+// dedicated deterministic stream. Rates approximate England national figures so
+// the caseload context reads true; the exact numbers are not the point.
+function generateProfile(
+  config: SchoolConfig,
+  index: number,
+  yearGroup: number,
+): PupilProfile {
+  // A distinct constant keeps this stream independent of the event-data rng, so
+  // adding these fields never shifts attendance/behaviour/attainment.
+  const rng = createRng(config.seed * 100_003 + index * 7 + 99_991);
+
+  const freeSchoolMeals = rng() < 0.23;
+  // Pupil Premium is the wider eligibility (ever-6 FSM + LAC/service); a FSM
+  // pupil is always PP, plus a slice of others.
+  const pupilPremium = freeSchoolMeals || rng() < 0.06;
+  const senRoll = rng();
+  const senStatus =
+    senRoll < 0.043 ? "EHCP" : senRoll < 0.17 ? "SEN Support" : null;
+  const eal = rng() < 0.19;
+  const lookedAfter = rng() < 0.008;
+  const youngCarer = rng() < 0.015;
+  const serviceChild = rng() < 0.008;
+  const medicalNeeds = rng() < 0.12 ? pick(rng, MEDICAL_LABELS) : null;
+
+  // Admission: normally September of the pupil's entry year; ~5% are in-year
+  // admissions (themselves a recognised vulnerability marker).
+  const entryYear = config.anchorDate.getUTCFullYear() - (yearGroup - 7) - 1;
+  const inYear = rng() < 0.05;
+  const admissionDate = inYear
+    ? utcDate(entryYear + 1, Math.floor(rng() * 6), 1 + Math.floor(rng() * 27))
+    : utcDate(entryYear, 8, 3); // 3 September
+
+  return {
+    // Most pupils go by their given name; a minority have a recorded preferred
+    // name. Kept null here (the UI falls back to the first name); hero cases set
+    // it explicitly where the story needs it.
+    preferredName: null,
+    sex: rng() < 0.51 ? "Male" : "Female",
+    admissionDate,
+    house: pick(rng, HOUSES),
+    firstLanguage: eal ? pick(rng, EAL_LANGUAGES) : "English",
+    ethnicity: pick(rng, ETHNICITIES),
+    pupilPremium,
+    freeSchoolMeals,
+    senStatus,
+    eal,
+    lookedAfter,
+    youngCarer,
+    serviceChild,
+    medicalNeeds,
+  };
+}
 
 // mulberry32 — small, fast, deterministic PRNG.
 export function createRng(seed: number): () => number {
@@ -377,6 +469,7 @@ export function generatePupil(
     attendance: generateAttendance(days, absenceProfile(pattern, rng), rng),
     behaviour: generateBehaviour(days, pattern, rng),
     attainment: generateAttainment(days, pattern, rng),
+    ...generateProfile(config, index, yearGroup),
   };
 }
 

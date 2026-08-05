@@ -656,6 +656,35 @@ model Pupil {
   // Optional: some MIS (and the Wonde sandbox) don't share a date of birth, and
   // the rules engine doesn't use it. A pupil is valid without one.
   dateOfBirth       DateTime? @map("date_of_birth")
+
+  // Snapshot: personal detail that identifies the child. Optional (a MIS may
+  // not hold every field). These are part of the *revealed* identity — the API
+  // only returns them once a case is unsealed, alongside first/last name.
+  preferredName     String?  @map("preferred_name")
+  sex               String?
+  admissionDate     DateTime? @map("admission_date")
+  house             String?
+  firstLanguage     String?  @map("first_language")
+  ethnicity         String?
+
+  // Safeguarding context — the statutory vulnerability markers a DSL reads to
+  // judge why a pattern matters (KCSIE cohorts). These are NON-identifying, so
+  // the API returns them even while a case is sealed. All sourced from the MIS
+  // via Wonde in production; synthetic in development.
+  pupilPremium      Boolean  @default(false) @map("pupil_premium")
+  freeSchoolMeals   Boolean  @default(false) @map("free_school_meals")
+  // "SEN Support" | "EHCP" | null. A label, not a diagnosis.
+  senStatus         String?  @map("sen_status")
+  // English as an additional language.
+  eal               Boolean  @default(false)
+  // Looked-after child (in local-authority care).
+  lookedAfter       Boolean  @default(false) @map("looked_after")
+  youngCarer        Boolean  @default(false) @map("young_carer")
+  // Child of a serving-forces family.
+  serviceChild      Boolean  @default(false) @map("service_child")
+  // A short label (e.g. "Asthma", "Type 1 diabetes"), never a full record.
+  medicalNeeds      String?  @map("medical_needs")
+
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

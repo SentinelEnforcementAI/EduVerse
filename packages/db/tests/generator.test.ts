@@ -55,6 +55,40 @@ describe("determinism", () => {
   });
 });
 
+describe("safeguarding context", () => {
+  it("carries deterministic statutory-context and snapshot fields", () => {
+    const p = generatePupil(config, 7);
+    // Booleans present; a language and ethnicity always set; admission is a Date.
+    for (const flag of [
+      p.pupilPremium,
+      p.freeSchoolMeals,
+      p.eal,
+      p.lookedAfter,
+      p.youngCarer,
+      p.serviceChild,
+    ]) {
+      expect(typeof flag).toBe("boolean");
+    }
+    expect(p.firstLanguage).toBeTruthy();
+    expect(p.ethnicity).toBeTruthy();
+    expect(p.admissionDate).toBeInstanceOf(Date);
+    // A non-EAL pupil's first language is English; an EAL pupil's is not.
+    expect(p.eal ? p.firstLanguage !== "English" : p.firstLanguage === "English").toBe(true);
+    // Deterministic across calls.
+    expect(generatePupil(config, 7).senStatus).toEqual(p.senStatus);
+  });
+
+  it("produces plausible cohort rates across a roll", () => {
+    const pupils = generateSchool({ ...config, pupilCount: 400, months: 3 });
+    const pp = pupils.filter((p) => p.pupilPremium).length;
+    // Pupil Premium is common but nowhere near everyone.
+    expect(pp).toBeGreaterThan(400 * 0.15);
+    expect(pp).toBeLessThan(400 * 0.6);
+    // FSM pupils are always Pupil Premium.
+    expect(pupils.every((p) => !p.freeSchoolMeals || p.pupilPremium)).toBe(true);
+  });
+});
+
 describe("volumes", () => {
   it("generates the full roll with two sessions per school day", () => {
     const small: SchoolConfig = { ...config, pupilCount: 20, months: 3 };

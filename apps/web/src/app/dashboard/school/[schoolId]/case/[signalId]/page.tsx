@@ -27,6 +27,12 @@ import {
 } from "./case-actions";
 import { CommsPanel } from "./case-comms";
 import { CaseFilePanel, ReviewScheduler } from "./case-file";
+import {
+  ContextFlags,
+  LifecycleStepper,
+  RiskFactorBreakdown,
+  SnapshotPanel,
+} from "./case-insight-panels";
 import { CaseReferral } from "./case-referral";
 
 function formatDate(date: Date) {
@@ -155,6 +161,12 @@ export default async function CaseViewPage({
         </div>
       </div>
 
+      {/* Safeguarding context — non-identifying, shown even while sealed */}
+      <ContextFlags context={c.context} />
+
+      {/* Case lifecycle — composed from real state */}
+      <LifecycleStepper stages={c.lifecycle} />
+
       {/* Time to surface */}
       {c.timeToSurface !== null ? (
         <Card className="mt-5 flex items-center gap-3 border-cobalt/30 bg-cobalt-tint p-4">
@@ -206,6 +218,8 @@ export default async function CaseViewPage({
               ))}
             </ol>
           </section>
+
+          <RiskFactorBreakdown factors={c.riskFactors} />
 
           <section>
             <h2 className="text-xl font-semibold">Risk interpretation</h2>
@@ -333,6 +347,8 @@ export default async function CaseViewPage({
 
         {/* Context column */}
         <div className="flex flex-col gap-6">
+          <SnapshotPanel snapshot={c.snapshot} />
+
           <Card className="p-5">
             <h3 className="text-base font-semibold">Decision</h3>
             {c.status === "OPEN" ? (

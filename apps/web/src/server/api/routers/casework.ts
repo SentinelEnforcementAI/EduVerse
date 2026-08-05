@@ -9,6 +9,7 @@ import {
   tenancyProcedure,
 } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
+import { caseLifecycle, riskFactorsFor } from "@/server/case-insight";
 import {
   confidenceBand,
   escalationLevel,
@@ -230,6 +231,24 @@ export const caseworkRouter = createTRPCRouter({
           yearGroup: true,
           firstName: true,
           lastName: true,
+          registrationGroup: true,
+          // Safeguarding context — non-identifying, returned even while sealed.
+          pupilPremium: true,
+          freeSchoolMeals: true,
+          senStatus: true,
+          eal: true,
+          lookedAfter: true,
+          youngCarer: true,
+          serviceChild: true,
+          medicalNeeds: true,
+          // Personal snapshot — identifying, returned only once revealed.
+          preferredName: true,
+          dateOfBirth: true,
+          sex: true,
+          admissionDate: true,
+          house: true,
+          firstLanguage: true,
+          ethnicity: true,
         },
       });
       if (!pupil) {
@@ -254,14 +273,22 @@ export const caseworkRouter = createTRPCRouter({
         ...new Set(reasoning.dataPoints.map((p) => p.src ?? source)),
       ];
 
-      // Linked context: the pupil's other open signals — real links only.
+      // Linked context: the pupil's other open signals — real links only. The
+      // severity/serious/rule are read so each sibling can be placed in its
+      // domain at its own escalation level for the risk-factor breakdown.
       const siblings = await db.signal.findMany({
         where: {
           pupilId: signal.pupilId,
           status: "OPEN",
           id: { not: signal.id },
         },
-        select: { id: true, title: true },
+        select: {
+          id: true,
+          title: true,
+          severity: true,
+          serious: true,
+          ruleVersion: { select: { key: true } },
+        },
         take: 10,
       });
 
@@ -333,6 +360,32 @@ export const caseworkRouter = createTRPCRouter({
           })
         : [];
 
+      // Domain risk-factor breakdown: this case's evidence plus the pupil's
+      // other open signals, bucketed by domain at their escalation level. The
+      // explainable alternative to a single score — evidence, never a number.
+      const riskFactors = riskFactorsFor({
+        primaryLevel: level,
+        primaryDomain: source,
+        points: reasoning.dataPoints.map((p) => ({
+          label: p.label,
+          src: p.src ?? null,
+        })),
+        siblings: siblings.map((s) => ({
+          level: escalationLevel(s.severity, s.serious),
+          domain: sourceForRule(s.ruleVersion.key),
+          title: s.title,
+        })),
+      });
+
+      // Case lifecycle, composed from real state (status, case file, referral).
+      const lifecycle = caseLifecycle({
+        status: signal.status,
+        caseFileOpened: tasks.length > 0,
+        reviewsScheduled: reviews.length,
+        referralSubmitted: referral !== null,
+        referralDecided: Boolean(referral?.decision),
+      });
+
       await recordAuditEvent(db, {
         tenantId: school.id,
         userId: ctx.session.user.id,
@@ -364,6 +417,35 @@ export const caseworkRouter = createTRPCRouter({
         signalsLinked: reasoning.dataPoints.length,
         sources,
         escalation: LEVEL_META[level],
+        // Statutory safeguarding context — non-identifying, so returned even
+        // while sealed: a DSL sees why a pattern matters before deciding to
+        // unseal the child.
+        context: {
+          pupilPremium: pupil.pupilPremium,
+          freeSchoolMeals: pupil.freeSchoolMeals,
+          senStatus: pupil.senStatus,
+          eal: pupil.eal,
+          lookedAfter: pupil.lookedAfter,
+          youngCarer: pupil.youngCarer,
+          serviceChild: pupil.serviceChild,
+          medicalNeeds: pupil.medicalNeeds,
+        },
+        // Personal snapshot — identifying detail, so present ONLY once the case
+        // has been revealed; otherwise it never leaves the server.
+        snapshot: revealed
+          ? {
+              preferredName: pupil.preferredName,
+              dateOfBirth: pupil.dateOfBirth,
+              sex: pupil.sex,
+              registrationGroup: pupil.registrationGroup,
+              admissionDate: pupil.admissionDate,
+              house: pupil.house,
+              firstLanguage: pupil.firstLanguage,
+              ethnicity: pupil.ethnicity,
+            }
+          : null,
+        riskFactors,
+        lifecycle,
         overall: reasoning.summary,
         interpretation: {
           summary: reasoning.summary,

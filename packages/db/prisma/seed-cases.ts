@@ -105,6 +105,32 @@ const HEROES: Hero[] = [
   },
 ];
 
+// A curated safeguarding-context picture for each hero pupil, so the flags on
+// the case reinforce its story (rather than the random synthetic spread): the
+// disclosure pupil carries disadvantage; the cross-domain pupil has the SEND +
+// ADHD context the "concentration concerns" data point implies; the Early-Help
+// welfare pupil is a young carer on free school meals — a classic unmet-need
+// picture. Applied on every seed so a reset (which regenerates pupils) restores
+// it deterministically.
+const HERO_PROFILE: Record<string, Prisma.PupilUpdateInput> = {
+  "hero-online-disclosure": {
+    pupilPremium: true,
+    freeSchoolMeals: true,
+    senStatus: null,
+    medicalNeeds: null,
+  },
+  "hero-attendance-behaviour": {
+    pupilPremium: true,
+    senStatus: "SEN Support",
+    medicalNeeds: "ADHD (medicated)",
+  },
+  "hero-welfare": {
+    pupilPremium: true,
+    freeSchoolMeals: true,
+    youngCarer: true,
+  },
+};
+
 // Seeds the hero cases into a school. flagship schools get all three (including
 // the serious Level 4 disclosure); other schools get the two non-serious cases
 // so every school has compelling examples without every school having a Level 4.
@@ -141,6 +167,13 @@ export async function seedHeroCases(
   for (let i = 0; i < heroes.length; i++) {
     const hero = heroes[i]!;
     const pupilId = pupils[i]!.id;
+
+    // Give the hero pupil its curated safeguarding-context picture (idempotent).
+    const profile = HERO_PROFILE[hero.key];
+    if (profile) {
+      await systemDb.pupil.update({ where: { id: pupilId }, data: profile });
+    }
+
     // Idempotent: one hero of each key per school (keyed by pupil + title).
     const existing = await systemDb.signal.findFirst({
       where: { tenantId, pupilId, title: hero.title },
