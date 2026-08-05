@@ -159,54 +159,31 @@ const HERO_DOCS: Record<string, CaseDocSpec[]> = {
       type: "Assessment",
       status: "Filed",
       date: "2026-04-27",
-      themes: ["early help", "attendance", "wellbeing", "send", "young carer"],
+      themes: ["attendance", "wellbeing", "behaviour", "sen support", "early help"],
       summary:
-        "Early Help assessment for attendance, low mood and behaviour changes recorded over a fortnight. No immediate referral at this stage; case kept under safeguarding oversight.",
+        "Early Help assessment completed following a fortnight of linked attendance, wellbeing and behaviour concerns. Existing SEN Support recognised alongside identified protective factors.",
       imageKey: "early-help-assessment",
-      content: `EARLY HELP ASSESSMENT - ATTENDANCE AND WELLBEING
-Downlands Secondary School, Weald Multi-Academy Trust
-Document reference EHA-2026-0421 (SEALED)
+      content: `BACKGROUND
 
-PUPIL DETAILS (SEALED)
-Pupil reference: Pupil 0421
-Year group: Year 9
-Date of birth: [sealed]
-Date of assessment: 27 April 2026
-Assessment completed by: Pastoral Lead
-
-REASON FOR ASSESSMENT
-Concerns regarding attendance, low mood and changes in behaviour recorded over the last fortnight.
+This assessment has been completed in relation to Pupil 0421 following a review of attendance, emotional wellbeing and behaviour over the previous fortnight.
 
 PRESENTING NEEDS
-- Attendance has declined over the past two weeks (several late arrivals and partial absences).
-- Pupil reports feeling worried and tired before school.
-- Reduced engagement in lessons.
-- Withdrawal from peers at break and lunchtime.
-- Increased need for reassurance from staff.
+
+Attendance has declined with several late arrivals and partial absences. Staff have observed reduced classroom engagement, increased anxiety before lessons and withdrawal from peers during unstructured times. Existing SEN Support remains in place and continues to be implemented consistently.
 
 STRENGTHS AND PROTECTIVE FACTORS
-- Positive relationships with key staff.
-- Engages well in structured activities and 1:1 support.
-- Good response to predictable routines.
-- Family remains communicative and willing to engage.
-- No previous safeguarding concerns of this nature.
+
+The pupil maintains positive relationships with trusted staff, responds well to predictable routines and engages positively during structured activities. The family remains communicative and supportive of school-based interventions.
 
 ASSESSMENT OF NEED
-Concerns are currently low-level when viewed individually but are beginning to indicate a developing pattern. Early Help support is appropriate at this stage. No immediate safeguarding referral required, however case to remain under safeguarding oversight.
+
+Each concern is low level when viewed individually. However, the combined presentation suggests an emerging pattern requiring coordinated monitoring and early intervention. At the time of assessment the threshold for statutory intervention had not been met, although safeguarding oversight remained appropriate.
 
 PLAN OF SUPPORT
-- Continue SEN Support arrangements and classroom strategies.
-- Daily check-in with pastoral staff.
-- Weekly wellbeing conversation for the next four weeks.
-- Monitor attendance daily and contact home if absence persists.
-- Offer family support letter (see draft dated 25 April 2026).
 
-REVIEW ARRANGEMENTS
-Review date: 11 May 2026 or earlier if required.
-DSL to be informed of any escalation in concerns.
+Continue SEN Support arrangements. Weekly wellbeing conversations with pastoral staff. Daily attendance monitoring. Family liaison maintained. Review in two weeks or sooner should safeguarding concerns escalate.
 
-CONSENT
-Parental consent for Early Help support obtained: Yes. Date: 27 April 2026.`,
+This assessment forms part of the ongoing record for this case.`,
     },
     {
       key: "0421-family-support-letter",
@@ -214,33 +191,27 @@ Parental consent for Early Help support obtained: Yes. Date: 27 April 2026.`,
       type: "Letter",
       status: "Draft",
       date: "2026-04-25",
-      themes: ["family support", "early help", "young carer", "attendance"],
+      themes: ["family support", "wellbeing", "young carer", "early help"],
       summary:
-        "Draft letter inviting the pupil's family to meet the pastoral and safeguarding team to discuss coordinated support.",
+        "Draft letter offering coordinated support following emerging wellbeing concerns and possible caring responsibilities identified within this case.",
       imageKey: "family-support-letter",
       content: `PRIVATE AND CONFIDENTIAL
-Downlands Secondary School, Weald Multi-Academy Trust
-Letter reference FAM-2026-0421 (DRAFT - SEALED)
-25 April 2026
 
-To the Parent/Carer of Pupil 0421 (sealed address)
-
-Dear Parent/Carer,
+Dear Parent or Carer,
 
 We are writing to let you know that members of our pastoral and safeguarding team would like to offer some additional support to your family.
 
-Over recent weeks we have noticed a small number of changes in Pupil 0421's attendance, emotional wellbeing and general engagement in school. None of these concerns alone would necessarily require additional intervention, but together they suggest that a conversation may be helpful.
+Over recent weeks we have noticed several low-level changes in relation to Pupil 0421, including attendance, emotional wellbeing and engagement in school. While none of these concerns alone would require additional intervention, together they suggest that an early conversation may be beneficial.
 
-We also understand that Pupil 0421 may sometimes take on caring responsibilities at home. We appreciate that many families manage significant commitments and we want to ensure appropriate support is available where needed.
+We also understand that the pupil may occasionally undertake caring responsibilities at home. We appreciate the pressures many families experience and want to ensure appropriate support is available where required.
 
-We would like to invite you to meet with a member of our pastoral and safeguarding team to discuss any support that may benefit your family. This could include practical advice, coordinated school support or referral to voluntary services if appropriate. No decisions will be made without discussing options with you unless there is an immediate safeguarding concern.
+We would like to invite you to meet with a member of our pastoral and safeguarding team to discuss how school may be able to support your family. This may include practical advice, coordinated school support or referral to voluntary services where appropriate.
 
 Our aim is to work alongside families in a supportive and respectful way so that pupils can attend school regularly, feel safe and achieve their full potential.
 
-Please contact the school office if you would like to arrange a convenient time to meet.
-
 Yours faithfully,
-Pastoral Lead
+
+Safeguarding Team
 Downlands Secondary School`,
     },
     {
@@ -249,27 +220,50 @@ Downlands Secondary School`,
       type: "Chronology",
       status: "Filed",
       date: "2026-04-28",
-      themes: ["chronology", "safeguarding", "attendance", "wellbeing", "online safety"],
+      themes: ["chronology", "attendance", "wellbeing", "safeguarding"],
       summary:
-        "Dated record of the concerns and actions on this case, from the first attendance note to the same-day referral.",
+        "Chronological record of safeguarding activity relating to Pupil 0421 up to referral on 28 April 2026.",
       imageKey: "case-chronology",
-      content: `CASE CHRONOLOGY - PUPIL 0421 (SEALED)
-Case reference CHR-2026-0421
-Exported: 28/04/2026 12:10
+      content: `CASE REFERENCE
 
-14/04/2026 09:15 | Tutor (Year 9) | Attendance | Increase in late arrivals noted this week.
-16/04/2026 11:30 | Subject Teacher | Behaviour/Wellbeing | Pupil quieter than usual, minimal participation.
-18/04/2026 14:20 | Pastoral Lead | Wellbeing | Welfare check-in completed. Pupil reports feeling worried and tired. No disclosure.
-21/04/2026 10:05 | SENCO | SEN Support | Review of support plan. Strategies to continue.
-23/04/2026 12:45 | Pastoral Staff | Behaviour/Wellbeing | Withdrawal from peers at lunchtime observed.
-25/04/2026 16:10 | Pastoral Lead | Family Engagement | Draft family support letter prepared.
-27/04/2026 15:30 | Pastoral Lead | Assessment | Early Help Assessment completed for attendance and wellbeing.
-28/04/2026 09:40 | Pastoral Staff | Safeguarding | Pupil discloses concerning online contact from an unknown individual. Feels pressured.
-28/04/2026 10:15 | DSL | Safeguarding | DSL informed. Immediate discussion and initial risk assessment.
-28/04/2026 11:20 | DSL | Safeguarding | Decision made to refer to Children's Social Care. Referral submitted online.
-28/04/2026 12:05 | DSL | Safeguarding | Safeguarding record updated. Case chronology exported.
+Pupil 0421
 
-This chronology is a record of safeguarding concerns and actions for internal school use. All information is sealed and confidential.`,
+CHRONOLOGY
+
+14 April 2026
+Attendance monitoring identifies increased late arrivals.
+
+16 April 2026
+Tutor records reduced engagement during lessons.
+
+18 April 2026
+Pastoral welfare conversation completed. No safeguarding disclosure made.
+
+21 April 2026
+SEN Support reviewed. Existing strategies remain appropriate.
+
+23 April 2026
+Withdrawal from peers observed during lunchtime.
+
+25 April 2026
+Family Support Letter drafted following review of wellbeing indicators.
+
+27 April 2026
+Early Help Assessment completed. Coordinated monitoring agreed.
+
+28 April 2026 09:40
+Pupil discloses concerning online contact with an unknown adult.
+
+28 April 2026 10:15
+DSL reviews chronology and safeguarding history.
+
+28 April 2026 11:20
+Threshold met for referral to Children's Social Care.
+
+28 April 2026 12:05
+Safeguarding record updated. Ongoing monitoring arrangements confirmed.
+
+This chronology forms the sealed record for this case.`,
     },
     {
       key: "0421-referral-childrens-social-care",
@@ -277,43 +271,33 @@ This chronology is a record of safeguarding concerns and actions for internal sc
       type: "Referral",
       status: "Filed",
       date: "2026-04-28",
-      themes: ["referral", "online safety", "child sexual exploitation", "children's social care"],
+      themes: ["online safety", "exploitation", "disclosure", "threshold", "referral"],
       summary:
-        "Same-day referral to Children's Social Care after an online exploitation disclosure met the threshold for statutory intervention.",
+        "Same-day safeguarding referral following a disclosure by Pupil 0421 indicating possible online exploitation. Referral submitted following DSL assessment. Parental consent considered in line with safeguarding procedures.",
       imageKey: "referral-childrens-social-care",
-      content: `REFERRAL TO CHILDREN'S SOCIAL CARE
-Downlands Secondary School, Weald Multi-Academy Trust
-Referral reference DSC-2026-0421 (SEALED)
+      content: `PURPOSE
 
-Pupil reference: Pupil 0421 (sealed)
-Date of referral: 28 April 2026
-Time of referral: 11:20
-Referral completed by: Designated Safeguarding Lead
-School: Downlands Secondary School
-Trust: Weald Multi-Academy Trust
-Local authority: Wealden County Council
-Referral method: Online referral portal
-Notification to parents/carers: Parental consent considered in line with safeguarding procedures. Parents to be informed unless doing so would increase risk or compromise any safeguarding activity.
+This referral concerns Pupil 0421 and has been completed following a safeguarding disclosure received on 28 April 2026.
 
 REASON FOR REFERRAL
-On 28 April 2026, Pupil 0421 disclosed during a welfare conversation with a trusted member of staff that they have been in contact online with an unknown older individual. The pupil reported that the individual has encouraged ongoing communication outside of monitored platforms and has asked for images and personal information. The pupil stated they felt worried and pressured.
 
-The disclosure was considered credible and consistent. The pupil was emotionally affected but engaged appropriately with support offered.
+During a welfare conversation with a trusted member of staff, the pupil disclosed repeated online contact from an unknown individual who had encouraged communication outside monitored platforms. The pupil described feeling pressured to continue conversations despite expressing discomfort. The disclosure was considered credible and consistent.
 
-DETAILS AND CONTEXT
-A review of existing records shows a pattern of recent concerns including reduced attendance, low mood, withdrawal from peers and reduced engagement in lessons. An Early Help Assessment was completed on 27 April 2026. At the time of assessment, concerns were emerging but did not meet the threshold for statutory intervention.
+DSL ASSESSMENT
 
-Following today's disclosure, the DSL has assessed the information and determined that the threshold for referral to Children's Social Care has been met due to potential risk of significant harm through online exploitation.
+The Designated Safeguarding Lead reviewed the disclosure immediately. Existing safeguarding records identified a recent pattern of attendance concerns, emotional withdrawal and reduced classroom engagement. Taken together, these indicators met the threshold for referral to Children's Social Care.
 
-ACTIONS TAKEN
-- Pupil 0421 spoken to, reassured and supported. Safeguarding explained.
-- DSL informed immediately.
-- Same-day referral submitted to Children's Social Care.
-- Police not contacted at this stage pending advice from Social Care.
-- Safeguarding record updated. Case chronology appended.
+ACTION TAKEN
+
+The pupil remained supported within school while the referral was completed. A same-day referral was submitted following discussion between the DSL and Deputy DSL. Relevant safeguarding records were attached.
+
+PARENTAL INVOLVEMENT
+
+Parental consent was considered in line with safeguarding procedures. It was determined that immediate referral was necessary in the interests of the pupil's safety. Parents will be informed unless doing so would increase risk or compromise safeguarding activity.
 
 NEXT STEPS
-Await acknowledgement and decision from Children's Social Care. Continue to provide appropriate in-school support and maintain daily monitoring.`,
+
+School will continue safeguarding oversight of Pupil 0421 pending advice from Children's Social Care. All subsequent decisions and professional discussions will be recorded within this case.`,
     },
   ],
   "hero-attendance-behaviour": [
