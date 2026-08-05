@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
@@ -18,6 +19,8 @@ export type TriageRow = {
   level: EscalationLevel;
   confidence: string;
   status: string;
+  domain?: { key: string; label: string };
+  cohorts?: string[];
 };
 
 export type TriageTab = { label: string; href: string; active: boolean };
@@ -33,6 +36,7 @@ export function TriageList({
   showSchool,
   caseHref,
   tabs,
+  filters,
 }: {
   title: string;
   subtitle: string;
@@ -40,17 +44,13 @@ export function TriageList({
   showSchool: boolean;
   caseHref: (row: TriageRow) => string;
   tabs?: TriageTab[];
+  filters?: ReactNode;
 }) {
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-          <p className="mt-1 text-base text-muted-foreground">{subtitle}</p>
-        </div>
-        <span className="text-sm text-muted-foreground">
-          {rows.length} {rows.length === 1 ? "case" : "cases"}
-        </span>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <p className="mt-1 text-base text-muted-foreground">{subtitle}</p>
       </div>
 
       {tabs && tabs.length > 0 ? (
@@ -72,6 +72,8 @@ export function TriageList({
           ))}
         </div>
       ) : null}
+
+      {filters}
 
       {rows.length === 0 ? (
         <Card className="mt-6 p-6 text-base text-muted-foreground">
@@ -96,6 +98,11 @@ export function TriageList({
                     {showSchool ? (
                       <span className="text-sm text-muted-foreground">
                         {row.schoolName}
+                      </span>
+                    ) : null}
+                    {row.domain ? (
+                      <span className="rounded-full bg-paper px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        {row.domain.label}
                       </span>
                     ) : null}
                   </div>

@@ -10,6 +10,7 @@ import {
 } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
 import { caseLifecycle, riskFactorsFor } from "@/server/case-insight";
+import { COHORT_DEFS, cohortsFor, domainOfRule } from "@/server/insights";
 import {
   confidenceBand,
   escalationLevel,
@@ -110,6 +111,7 @@ async function triageRows(
       serious: true,
       status: true,
       pupilId: true,
+      ruleVersion: { select: { key: true } },
     },
     orderBy: [{ severity: "desc" }, { updatedAt: "desc" }],
     take: 200,
@@ -117,10 +119,22 @@ async function triageRows(
   // Resolve pupils separately under the same RLS context and skip any signal
   // whose pupil is unreadable here — a required relation included inline would
   // make Prisma throw the whole query for one odd (e.g. cross-tenant) row and
-  // take down the triage list.
+  // take down the triage list. Context flags are read too: they are
+  // non-identifying, so a sealed row can still carry (and be filtered by) them.
   const pupils = await db.pupil.findMany({
     where: { id: { in: [...new Set(signals.map((s) => s.pupilId))] } },
-    select: { id: true, upn: true, yearGroup: true },
+    select: {
+      id: true,
+      upn: true,
+      yearGroup: true,
+      pupilPremium: true,
+      freeSchoolMeals: true,
+      senStatus: true,
+      eal: true,
+      lookedAfter: true,
+      youngCarer: true,
+      serviceChild: true,
+    },
   });
   const byId = new Map(pupils.map((p) => [p.id, p]));
   return signals.flatMap((signal) => {
@@ -137,6 +151,8 @@ async function triageRows(
         level: escalationLevel(signal.severity, signal.serious),
         confidence: confidenceBand(signal.severity),
         status: signal.status,
+        domain: domainOfRule(signal.ruleVersion.key),
+        cohorts: cohortsFor(pupil),
       },
     ];
   });
@@ -149,31 +165,88 @@ export const caseworkRouter = createTRPCRouter({
     .input(
       z.object({
         key: z.enum(TRIAGE_KEYS).default("active"),
+        // Filters (all optional). A trust director always reads every school so
+        // the school filter has full options; a DSL is scoped to their own.
         schoolId: z.string().min(1).optional(),
+        yearGroup: z.coerce.number().int().optional(),
+        domain: z.string().min(1).optional(),
+        level: z.coerce.number().int().min(1).max(4).optional(),
+        status: z.enum(["OPEN", "CONFIRMED", "ESCALATED"]).optional(),
+        cohort: z.string().min(1).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const meta = TRIAGE_META[input.key];
+      const isTrust = ctx.tenancy.mode === "mat";
 
-      // Trust scope: a director with no chosen school sees every school.
-      const targets =
-        input.schoolId || ctx.tenancy.mode === "school"
-          ? [dbForSchool(ctx.tenancy, input.schoolId ?? ctx.tenancy.schools[0]!.id)]
-          : ctx.tenancy.schools.map((s) => dbForSchool(ctx.tenancy, s.id));
-
+      // Read every school in scope up front (a DSL has just one), so the facet
+      // lists reflect the whole caseload and the school filter narrows in memory
+      // rather than changing what data is loaded.
+      const targets = ctx.tenancy.schools.map((s) => dbForSchool(ctx.tenancy, s.id));
       const grouped = await Promise.all(
         targets.map(({ school, db }) => triageRows(db, school, input.key)),
       );
-      const rows = grouped
-        .flat()
-        .sort((a, b) => b.level - a.level);
+      const all = grouped.flat().sort((a, b) => b.level - a.level);
+
+      // Facets from the unfiltered set, so a dropdown only offers values that
+      // actually appear.
+      const schoolsSeen = new Map<string, string>();
+      const yearsSeen = new Set<number>();
+      const domainsSeen = new Map<string, string>();
+      const levelsSeen = new Set<number>();
+      const cohortsSeen = new Set<string>();
+      for (const r of all) {
+        schoolsSeen.set(r.schoolId, r.schoolName);
+        yearsSeen.add(r.yearGroup);
+        domainsSeen.set(r.domain.key, r.domain.label);
+        levelsSeen.add(r.level);
+        for (const c of r.cohorts) cohortsSeen.add(c);
+      }
+
+      const rows = all.filter(
+        (r) =>
+          (!input.schoolId || r.schoolId === input.schoolId) &&
+          (input.yearGroup === undefined || r.yearGroup === input.yearGroup) &&
+          (!input.domain || r.domain.key === input.domain) &&
+          (input.level === undefined || r.level === input.level) &&
+          (!input.status || r.status === input.status) &&
+          (!input.cohort || r.cohorts.includes(input.cohort)),
+      );
 
       return {
-        scope: input.schoolId || ctx.tenancy.mode === "school" ? "school" : "trust",
+        // A director keeps trust scope even with a school filter applied, so the
+        // school column and full facets remain available.
+        scope: isTrust ? "trust" : "school",
         schoolId: input.schoolId ?? null,
         title: meta.title,
         subtitle: meta.subtitle,
         rows,
+        total: all.length,
+        facets: {
+          schools: isTrust
+            ? [...schoolsSeen.entries()]
+                .map(([id, name]) => ({ id, name }))
+                .sort((a, b) => a.name.localeCompare(b.name))
+            : [],
+          years: [...yearsSeen].sort((a, b) => a - b),
+          domains: [...domainsSeen.entries()]
+            .map(([key, label]) => ({ key, label }))
+            .sort((a, b) => a.label.localeCompare(b.label)),
+          levels: [...levelsSeen].sort((a, b) => b - a),
+          cohorts: COHORT_DEFS.filter((c) => cohortsSeen.has(c.key)).map((c) => ({
+            key: c.key,
+            label: c.label,
+          })),
+          statuses: TRIAGE_META[input.key].statuses,
+        },
+        applied: {
+          schoolId: input.schoolId ?? null,
+          yearGroup: input.yearGroup ?? null,
+          domain: input.domain ?? null,
+          level: input.level ?? null,
+          status: input.status ?? null,
+          cohort: input.cohort ?? null,
+        },
       };
     }),
 

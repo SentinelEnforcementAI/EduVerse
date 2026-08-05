@@ -5,7 +5,9 @@ import { TRPCError } from "@trpc/server";
 import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../../shell/breadcrumbs";
+import { TriageFilters } from "../../../shell/triage-filters";
 import { TriageList } from "../../../shell/triage-list";
+import { parseTriageFilters } from "../../../shell/triage-params";
 
 const KEYS = ["active", "awaiting"] as const;
 type Key = (typeof KEYS)[number];
@@ -14,16 +16,19 @@ type Key = (typeof KEYS)[number];
 // overview KPI card. Director-only; shows which school each case belongs to.
 export default async function TrustTriagePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ key: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { key } = await params;
   if (!KEYS.includes(key as Key)) notFound();
 
+  const filters = parseTriageFilters(await searchParams);
   const api = await serverApi();
   let data;
   try {
-    data = await api.casework.triage({ key: key as Key });
+    data = await api.casework.triage({ key: key as Key, ...filters });
   } catch (error) {
     if (error instanceof TRPCError && error.code === "FORBIDDEN") {
       redirect("/dashboard");
@@ -50,6 +55,15 @@ export default async function TrustTriagePage({
         rows={data.rows}
         showSchool
         caseHref={(row) => `/dashboard/school/${row.schoolId}/case/${row.id}`}
+        filters={
+          <TriageFilters
+            facets={data.facets}
+            applied={data.applied}
+            showSchool
+            shown={data.rows.length}
+            total={data.total}
+          />
+        }
         tabs={[
           {
             label: "Active concerns",

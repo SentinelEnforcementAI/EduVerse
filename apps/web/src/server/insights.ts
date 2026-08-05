@@ -48,7 +48,23 @@ export function domainOfRule(ruleKey: string): Domain {
 }
 
 // The statutory cohorts a head of safeguarding watches for over-representation.
-const COHORTS: { key: string; label: string; has: (p: InsightPupil) => boolean }[] = [
+// Exported as the single source of truth — the concerns filter reuses these.
+export type CohortFlags = Pick<
+  InsightPupil,
+  | "pupilPremium"
+  | "freeSchoolMeals"
+  | "senStatus"
+  | "eal"
+  | "lookedAfter"
+  | "youngCarer"
+  | "serviceChild"
+>;
+
+export const COHORT_DEFS: {
+  key: string;
+  label: string;
+  has: (f: CohortFlags) => boolean;
+}[] = [
   { key: "pupilPremium", label: "Pupil Premium", has: (p) => p.pupilPremium },
   { key: "freeSchoolMeals", label: "Free school meals", has: (p) => p.freeSchoolMeals },
   { key: "sen", label: "SEN (support or EHCP)", has: (p) => p.senStatus !== null },
@@ -57,6 +73,11 @@ const COHORTS: { key: string; label: string; has: (p: InsightPupil) => boolean }
   { key: "youngCarer", label: "Young carer", has: (p) => p.youngCarer },
   { key: "serviceChild", label: "Service child", has: (p) => p.serviceChild },
 ];
+
+// The cohort keys a pupil belongs to — non-identifying, safe on a sealed row.
+export function cohortsFor(flags: CohortFlags): string[] {
+  return COHORT_DEFS.filter((c) => c.has(flags)).map((c) => c.key);
+}
 
 function monthKeys(now: Date, months: number): { key: string; label: string }[] {
   const out: { key: string; label: string }[] = [];
@@ -96,7 +117,7 @@ export function buildInsights(schools: InsightSchool[], now: Date) {
     pupilsOnRoll += school.pupils.length;
     const pupilById = new Map(school.pupils.map((p) => [p.id, p]));
 
-    for (const c of COHORTS) {
+    for (const c of COHORT_DEFS) {
       rollCohort.set(c.key, (rollCohort.get(c.key) ?? 0) + school.pupils.filter(c.has).length);
     }
 
@@ -134,7 +155,7 @@ export function buildInsights(schools: InsightSchool[], now: Date) {
       const p = pupilById.get(pid);
       if (!p) continue;
       concernPupilTotal++;
-      for (const c of COHORTS) {
+      for (const c of COHORT_DEFS) {
         if (c.has(p)) concernCohort.set(c.key, (concernCohort.get(c.key) ?? 0) + 1);
       }
     }
@@ -149,7 +170,7 @@ export function buildInsights(schools: InsightSchool[], now: Date) {
     });
   }
 
-  const cohortLens = COHORTS.map((c) => {
+  const cohortLens = COHORT_DEFS.map((c) => {
     const rollCount = rollCohort.get(c.key) ?? 0;
     const concernCount = concernCohort.get(c.key) ?? 0;
     return {

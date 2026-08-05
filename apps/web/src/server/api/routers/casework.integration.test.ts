@@ -155,6 +155,39 @@ describe("casework.triage", () => {
       "Patcham",
     ]);
   });
+
+  it("exposes facets and filters the concerns list", async () => {
+    const caller = createCaller(await ctxFor(director));
+
+    const all = await caller.casework.triage({ key: "active" });
+    expect(all.total).toBe(2);
+    expect(all.facets.schools.map((s) => s.name).sort()).toEqual([
+      "Downlands",
+      "Patcham",
+    ]);
+    expect(all.facets.levels).toContain(3);
+    expect(all.facets.domains.some((d) => d.key === "attendance")).toBe(true);
+
+    // Filter by escalation level — one signal is level 3, the other level 2.
+    const lvl3 = await caller.casework.triage({ key: "active", level: 3 });
+    expect(lvl3.rows).toHaveLength(1);
+    expect(lvl3.rows.every((r) => r.level === 3)).toBe(true);
+    expect(lvl3.total).toBe(2); // total is the pre-filter caseload
+
+    // Filter by school.
+    const bySchool = await caller.casework.triage({
+      key: "active",
+      schoolId: schoolBId,
+    });
+    expect(bySchool.rows.every((r) => r.schoolId === schoolBId)).toBe(true);
+
+    // A domain with no matching signals returns an empty list, not an error.
+    const behaviour = await caller.casework.triage({
+      key: "active",
+      domain: "behaviour",
+    });
+    expect(behaviour.rows).toHaveLength(0);
+  });
 });
 
 describe("casework.case", () => {

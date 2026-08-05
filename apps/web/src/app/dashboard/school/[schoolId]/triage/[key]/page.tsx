@@ -5,7 +5,9 @@ import { TRPCError } from "@trpc/server";
 import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../../../shell/breadcrumbs";
+import { TriageFilters } from "../../../../shell/triage-filters";
 import { TriageList } from "../../../../shell/triage-list";
+import { parseTriageFilters } from "../../../../shell/triage-params";
 
 const KEYS = ["active", "awaiting"] as const;
 type Key = (typeof KEYS)[number];
@@ -14,18 +16,22 @@ type Key = (typeof KEYS)[number];
 // overview KPI card.
 export default async function SchoolTriagePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ schoolId: string; key: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { schoolId, key } = await params;
   if (!KEYS.includes(key as Key)) notFound();
 
+  // The school is fixed by the route; other filters come from the query string.
+  const filters = parseTriageFilters(await searchParams);
   const api = await serverApi();
   const tenancy = await api.overview.tenancy();
 
   let data;
   try {
-    data = await api.casework.triage({ key: key as Key, schoolId });
+    data = await api.casework.triage({ ...filters, key: key as Key, schoolId });
   } catch (error) {
     if (
       error instanceof TRPCError &&
@@ -64,6 +70,15 @@ export default async function SchoolTriagePage({
         rows={data.rows}
         showSchool={false}
         caseHref={(row) => `/dashboard/school/${row.schoolId}/case/${row.id}`}
+        filters={
+          <TriageFilters
+            facets={data.facets}
+            applied={data.applied}
+            showSchool={false}
+            shown={data.rows.length}
+            total={data.total}
+          />
+        }
         tabs={[
           {
             label: "Active concerns",
