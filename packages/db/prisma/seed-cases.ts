@@ -131,6 +131,60 @@ const HERO_PROFILE: Record<string, Prisma.PupilUpdateInput> = {
   },
 };
 
+// A filed case document for each hero, so the case view's "Linked documents"
+// section is populated in the demo. Sealed by construction: the content carries
+// the sealed reference ("the pupil"), never a name. UK English, no em dashes.
+const HERO_DOC: Record<
+  string,
+  { title: string; type: string; status: string; themes: string[]; summary: string; content: string }
+> = {
+  "hero-online-disclosure": {
+    title: "Referral to Children's Social Care (MASH)",
+    type: "Referral",
+    status: "Filed",
+    themes: ["referral", "online safety", "child sexual exploitation", "mash"],
+    summary:
+      "Same-day referral to the multi-agency safeguarding hub following an online exploitation disclosure.",
+    content: `REFERRAL TO CHILDREN'S SOCIAL CARE (MASH)
+
+This referral concerns the pupil identified by the sealed reference on this case. It is made the same day the disclosure was recorded.
+
+The pupil disclosed that an unknown adult contacted them online and asked them to share images. This followed a period of withdrawn presentation and secretive use of a device noted by staff. The concern meets the threshold for an immediate referral under the online child sexual abuse and exploitation guidance.
+
+Consent to refer was considered and the referral proceeds on the basis that seeking consent would place the child at risk. The Designated Safeguarding Lead has preserved the record and awaits acknowledgement from the multi-agency safeguarding hub.`,
+  },
+  "hero-attendance-behaviour": {
+    title: "Early Help Assessment - Attendance and Wellbeing",
+    type: "Assessment",
+    status: "Filed",
+    themes: ["early help", "attendance", "wellbeing", "send"],
+    summary:
+      "Early Help assessment opened after a fortnight of aligned attendance, mood and behaviour signals.",
+    content: `EARLY HELP ASSESSMENT
+
+This assessment concerns the pupil identified by the sealed reference on this case.
+
+Over a fortnight, attendance, mood and behaviour shifted in the same direction. Individually each signal was minor; together they describe a pupil whose needs are not currently being met. The pupil has SEN Support in place and a known attention need.
+
+The school will lead a coordinated Early Help response with the family's consent: an attendance support conversation, a check-in with the pastoral lead, and a review at the next pastoral meeting.`,
+  },
+  "hero-welfare": {
+    title: "Early Help Referral - Family Support",
+    type: "Referral",
+    status: "Filed",
+    themes: ["early help", "welfare", "young carer", "family support"],
+    summary:
+      "Early Help referral for coordinated family support following low-level welfare indicators.",
+    content: `EARLY HELP REFERRAL - FAMILY SUPPORT
+
+This referral concerns the pupil identified by the sealed reference on this case.
+
+A pattern of low-level welfare indicators has been recorded: arriving without adequate clothing for the weather, hunger in the morning, and a dip in attendance. The pupil has young carer responsibilities at home. These point to unmet need that a coordinated Early Help response can address.
+
+The referral is made with the family's consent and seeks family support alongside the school's own pastoral offer.`,
+  },
+};
+
 // Seeds the hero cases into a school. flagship schools get all three (including
 // the serious Level 4 disclosure); other schools get the two non-serious cases
 // so every school has compelling examples without every school having a Level 4.
@@ -179,24 +233,62 @@ export async function seedHeroCases(
       where: { tenantId, pupilId, title: hero.title },
       select: { id: true },
     });
-    if (existing) continue;
+    const signalId =
+      existing?.id ??
+      (
+        await systemDb.signal.create({
+          data: {
+            tenantId,
+            pupilId,
+            ruleVersionId: ruleVersion.id,
+            executionId: execution.id,
+            status: "OPEN",
+            severity: hero.severity,
+            serious: hero.serious,
+            title: hero.title,
+            reasoning: hero.reasoning as unknown as Prisma.InputJsonValue,
+            windowStart: new Date(hero.windowStart),
+            windowEnd: new Date(hero.windowEnd),
+          },
+          select: { id: true },
+        })
+      ).id;
+    if (!existing) created++;
 
-    await systemDb.signal.create({
-      data: {
-        tenantId,
-        pupilId,
-        ruleVersionId: ruleVersion.id,
-        executionId: execution.id,
-        status: "OPEN",
-        severity: hero.severity,
-        serious: hero.serious,
-        title: hero.title,
-        reasoning: hero.reasoning as unknown as Prisma.InputJsonValue,
-        windowStart: new Date(hero.windowStart),
-        windowEnd: new Date(hero.windowEnd),
-      },
-    });
-    created++;
+    // File the hero's linked case document (idempotent, deterministic id), so
+    // the case view's "Linked documents" section is populated. Linked to both
+    // the case (signalId) and the pupil (pupilId); sealed by construction.
+    const doc = HERO_DOC[hero.key];
+    if (doc) {
+      const docId = `seed-case-${tenantId.slice(-8)}-${hero.key}`;
+      await systemDb.document.upsert({
+        where: { id: docId },
+        update: {
+          signalId,
+          pupilId,
+          title: doc.title,
+          summary: doc.summary,
+          content: doc.content,
+          themes: doc.themes,
+          status: doc.status,
+        },
+        create: {
+          id: docId,
+          tenantId,
+          scope: "CASE",
+          signalId,
+          pupilId,
+          title: doc.title,
+          type: doc.type,
+          docDate: new Date(hero.windowEnd),
+          status: doc.status,
+          themes: doc.themes,
+          summary: doc.summary,
+          content: doc.content,
+          source: "seed-case",
+        },
+      });
+    }
   }
   return created;
 }

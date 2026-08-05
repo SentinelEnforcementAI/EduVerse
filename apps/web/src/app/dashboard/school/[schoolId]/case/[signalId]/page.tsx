@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   Brain,
   CalendarClock,
+  ChevronRight,
   Clock,
   FolderOpen,
   Link2,
@@ -280,16 +281,41 @@ export default async function CaseViewPage({
             </div>
           </section>
 
-          {c.documents.length > 0 ? (
-            <section>
-              <h2 className="text-xl font-semibold">Case documents</h2>
+          <section>
+            <h2 className="text-xl font-semibold">Linked documents</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Every document is linked to this pupil — to this concern or another
+              of theirs. Filed letters, records and referrals live here, sealed
+              by construction. Trust policies sit in the{" "}
+              <Link
+                href={`/dashboard/school/${schoolId}/documents`}
+                className="text-cobalt hover:underline"
+              >
+                document repository
+              </Link>
+              .
+            </p>
+            {c.documents.length === 0 ? (
+              <Card className="mt-3 p-4 text-sm text-muted-foreground">
+                No documents filed against this pupil yet. Draft one from Take
+                action above; it files here, linked to the case.
+              </Card>
+            ) : (
               <ul className="mt-3 flex flex-col gap-2">
                 {c.documents.map((d) => (
                   <li key={d.id}>
-                    <Card className="flex flex-wrap items-center justify-between gap-2 p-4">
-                      <div>
-                        <div className="text-sm font-semibold">{d.title}</div>
-                        <div className="text-xs text-muted-foreground">
+                    <Link
+                      href={`/dashboard/school/${schoolId}/documents/${d.id}`}
+                      className="group flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cloud bg-card p-4 transition-colors hover:border-cobalt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold">{d.title}</span>
+                          <span className="rounded-full bg-paper px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            {d.linkedTo === "case" ? "This case" : "Pupil record"}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
                           {d.type} ·{" "}
                           {d.docDate.toLocaleDateString("en-GB", {
                             day: "numeric",
@@ -299,12 +325,16 @@ export default async function CaseViewPage({
                           · {d.status}
                         </div>
                       </div>
-                    </Card>
+                      <ChevronRight
+                        className="size-5 shrink-0 text-muted-foreground transition-colors group-hover:text-cobalt"
+                        aria-hidden
+                      />
+                    </Link>
                   </li>
                 ))}
               </ul>
-            </section>
-          ) : null}
+            )}
+          </section>
 
           <section>
             <h2 className="text-xl font-semibold">Case notes</h2>

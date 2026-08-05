@@ -8,10 +8,10 @@ import { Card } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
 import {
+  AreaTrend,
   BarList,
   CohortLens,
-  LevelMix,
-  MonthlyVolume,
+  LevelDonut,
   Outcomes,
   StatTile,
 } from "./insight-charts";
@@ -65,7 +65,7 @@ export default async function InsightsPage() {
             Active concerns by the month they surfaced, across the trust.
           </p>
           <div className="mt-4">
-            <MonthlyVolume
+            <AreaTrend
               labels={insights.volumeByMonth.labels}
               values={insights.volumeByMonth.values}
             />
@@ -79,7 +79,7 @@ export default async function InsightsPage() {
             Where the live caseload sits. A level, never a score.
           </p>
           <div className="mt-4">
-            <LevelMix mix={insights.levelMix} />
+            <LevelDonut mix={insights.levelMix} />
           </div>
         </Card>
 

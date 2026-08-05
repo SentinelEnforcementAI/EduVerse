@@ -25,31 +25,65 @@ export function StatTile({
   );
 }
 
-// Concern volume by month — magnitude over time. Column heights encode a real
-// count; the current month is labelled.
-export function MonthlyVolume({ labels, values }: { labels: string[]; values: number[] }) {
+// Concern volume over time — a trend is a line, not a column of bars. A cobalt
+// line over a soft area fill, a node per month, the latest month picked out.
+// Baseline sits at zero so the shape of the trend is honest, never exaggerated.
+export function AreaTrend({ labels, values }: { labels: string[]; values: number[] }) {
+  const w = 320;
+  const h = 120;
+  const pad = { top: 14, right: 8, bottom: 6, left: 8 };
   const max = Math.max(1, ...values);
+  const n = values.length;
+  const x = (i: number) =>
+    pad.left + (n <= 1 ? 0 : (i / (n - 1)) * (w - pad.left - pad.right));
+  const y = (v: number) => pad.top + (1 - v / max) * (h - pad.top - pad.bottom);
+  const base = h - pad.bottom;
+  const line = values
+    .map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+    .join(" ");
+  const area = `${line} L${x(n - 1).toFixed(1)},${base} L${x(0).toFixed(1)},${base} Z`;
   return (
     <div>
-      <div className="flex h-40 items-end gap-1.5">
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        className="w-full"
+        role="img"
+        aria-label="Concern volume by month"
+      >
+        <defs>
+          <linearGradient id="area-cobalt" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="var(--cobalt)" stopOpacity="0.26" />
+            <stop offset="100%" stopColor="var(--cobalt)" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#area-cobalt)" />
+        <path
+          d={line}
+          fill="none"
+          stroke="var(--cobalt)"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
         {values.map((v, i) => (
-          <div key={i} className="flex flex-1 flex-col items-center gap-1">
-            <div className="text-[10px] tabular-nums text-muted-foreground">
-              {v > 0 ? v : ""}
-            </div>
-            <div
-              className="w-full rounded-t bg-cobalt/80"
-              style={{ height: `${Math.max(2, (v / max) * 100)}%` }}
-              title={`${labels[i]}: ${v}`}
-            />
-          </div>
+          <circle
+            key={i}
+            cx={x(i)}
+            cy={y(v)}
+            r={i === n - 1 ? 3.5 : 2.5}
+            fill={i === n - 1 ? "var(--cobalt)" : "var(--card)"}
+            stroke="var(--cobalt)"
+            strokeWidth="1.5"
+          >
+            <title>{`${labels[i]}: ${v}`}</title>
+          </circle>
         ))}
-      </div>
-      <div className="mt-1 flex gap-1.5">
+      </svg>
+      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
         {labels.map((l, i) => (
-          <div key={i} className="flex-1 text-center text-[10px] text-muted-foreground">
+          <span key={i} className={i === n - 1 ? "font-medium text-ink" : ""}>
             {l}
-          </div>
+          </span>
         ))}
       </div>
     </div>
@@ -96,27 +130,62 @@ const LEVEL_STYLE: Record<number, { bg: string; label: string }> = {
   4: { bg: "var(--risk-red)", label: "L4 Statutory" },
 };
 
-// The escalation-level mix of the active caseload: a single proportion bar on
-// the ordinal level palette, with a labelled legend (never colour-alone).
-export function LevelMix({ mix }: { mix: { level: number; count: number }[] }) {
-  const total = mix.reduce((n, m) => n + m.count, 0) || 1;
+// The escalation-level mix of the active caseload: a donut on the ordinal level
+// palette with the caseload total at its centre, and a labelled legend beside
+// it (identity is never colour-alone). Part-to-whole, so a ring reads at a
+// glance where a stacked bar only reads on inspection.
+export function LevelDonut({ mix }: { mix: { level: number; count: number }[] }) {
+  const total = mix.reduce((n, m) => n + m.count, 0);
+  const r = 42;
+  const circumference = 2 * Math.PI * r;
+  const active = mix.filter((m) => m.count > 0);
+  const segments = active.map((m, i) => {
+    const priorCount = active
+      .slice(0, i)
+      .reduce((sum, p) => sum + p.count, 0);
+    return {
+      level: m.level,
+      dash: (m.count / (total || 1)) * circumference,
+      offset: (priorCount / (total || 1)) * circumference,
+      count: m.count,
+    };
+  });
   return (
-    <div>
-      <div className="flex h-4 w-full overflow-hidden rounded-full bg-paper">
-        {mix.map((m) =>
-          m.count > 0 ? (
-            <div
-              key={m.level}
-              style={{
-                width: `${(m.count / total) * 100}%`,
-                backgroundColor: LEVEL_STYLE[m.level]!.bg,
-              }}
-              title={`${LEVEL_STYLE[m.level]!.label}: ${m.count}`}
-            />
-          ) : null,
-        )}
+    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-7">
+      <div className="relative size-32 shrink-0">
+        <svg viewBox="0 0 100 100" className="size-32 -rotate-90">
+          <circle
+            cx="50"
+            cy="50"
+            r={r}
+            fill="none"
+            stroke="var(--cloud)"
+            strokeWidth="12"
+          />
+          {segments.map((s) => (
+            <circle
+              key={s.level}
+              cx="50"
+              cy="50"
+              r={r}
+              fill="none"
+              stroke={LEVEL_STYLE[s.level]!.bg}
+              strokeWidth="12"
+              strokeDasharray={`${s.dash} ${circumference - s.dash}`}
+              strokeDashoffset={-s.offset}
+            >
+              <title>{`${LEVEL_STYLE[s.level]!.label}: ${s.count}`}</title>
+            </circle>
+          ))}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-semibold tabular-nums">{total}</span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Concerns
+          </span>
+        </div>
       </div>
-      <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ul className="grid w-full grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-1">
         {mix.map((m) => (
           <li key={m.level} className="flex items-center gap-2 text-sm">
             <span
@@ -125,7 +194,7 @@ export function LevelMix({ mix }: { mix: { level: number; count: number }[] }) {
               style={{ backgroundColor: LEVEL_STYLE[m.level]!.bg }}
             />
             <span className="text-muted-foreground">{LEVEL_STYLE[m.level]!.label}</span>
-            <span className="tabular-nums font-medium">{m.count}</span>
+            <span className="ml-auto tabular-nums font-medium">{m.count}</span>
           </li>
         ))}
       </ul>

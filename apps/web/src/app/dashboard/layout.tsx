@@ -10,6 +10,7 @@ import {
   Inbox,
   LayoutDashboard,
   LineChart,
+  Moon,
   Rocket,
   ScrollText,
   SearchCheck,
@@ -82,8 +83,18 @@ export default async function DashboardLayout({
           badge: counts.concerns,
           match: "/dashboard/trust/triage",
         },
-        { href: "/dashboard/reports", label: "Reports", icon: FileBarChart },
         { href: "/dashboard/insights", label: "Insights", icon: LineChart },
+        {
+          href: "/dashboard/documents",
+          label: "Documents",
+          icon: FolderOpen,
+        },
+        { href: "/dashboard/reports", label: "Reports", icon: FileBarChart },
+        {
+          href: "/dashboard/trust/kcsie",
+          label: "KCSIE",
+          icon: FileText,
+        },
         {
           href: "/dashboard/alerts",
           label: "Alerts",
@@ -143,6 +154,7 @@ export default async function DashboardLayout({
           label: "Inspection",
           icon: SearchCheck,
         },
+    { href: "/dashboard/oncall", label: "On-call", icon: Moon },
   ];
   if (isAdmin) {
     settings.push(

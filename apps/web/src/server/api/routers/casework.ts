@@ -387,9 +387,14 @@ export const caseworkRouter = createTRPCRouter({
           orderBy: { createdAt: "desc" },
           take: 100,
         }),
+        // Documents linked to this pupil, not just this one case: a filed
+        // letter or record from a sibling concern is part of the same child's
+        // picture. Each carries which case it belongs to (see the mapping
+        // below). Sealed by construction — a case document holds a sealed ref,
+        // never a name.
         db.document.findMany({
-          where: { signalId: signal.id, scope: "CASE" },
-          orderBy: { createdAt: "desc" },
+          where: { pupilId: signal.pupilId, scope: "CASE" },
+          orderBy: { docDate: "desc" },
           take: 50,
         }),
         db.caseTask.findMany({
@@ -548,6 +553,9 @@ export const caseworkRouter = createTRPCRouter({
           status: d.status,
           docDate: d.docDate,
           summary: d.summary,
+          // What the document is linked to: this concern, another of the
+          // pupil's concerns, or (fallback) the pupil's record.
+          linkedTo: d.signalId === signal.id ? "case" : "pupil",
         })),
         commOptions: COMM_TYPES.map((t) => ({
           type: t,

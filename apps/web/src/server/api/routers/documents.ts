@@ -30,6 +30,78 @@ function schoolFor(tenancy: Tenancy, schoolId: string | undefined) {
 }
 
 export const documentsRouter = createTRPCRouter({
+  // The trust-wide document repository (spec 5.9), for a director: every school's
+  // safeguarding documents in one place. Read from each school through its own
+  // RLS context and merged in application code — there is no cross-tenant query.
+  // Director-only; a DSL uses the single-school vault above.
+  trustVault: tenancyProcedure.query(async ({ ctx }) => {
+    if (ctx.tenancy.mode !== "mat" || !ctx.tenancy.trustId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "The trust repository is available to trust leadership only.",
+      });
+    }
+
+    const perSchool = await Promise.all(
+      ctx.tenancy.schools.map(async (s) => {
+        const { db } = dbForSchool(ctx.tenancy, s.id);
+        const docs = await db.document.findMany({
+          where: { scope: "ORG" },
+          orderBy: { docDate: "desc" },
+          take: 200,
+        });
+        return { school: s, docs };
+      }),
+    );
+
+    const documents = perSchool
+      .flatMap(({ school, docs }) =>
+        docs.map((d) => ({
+          id: d.id,
+          schoolId: school.id,
+          schoolName: school.name,
+          title: d.title,
+          type: d.type,
+          status: d.status,
+          docDate: d.docDate,
+          themes: d.themes,
+          summary: d.summary,
+        })),
+      )
+      .sort((a, b) => b.docDate.getTime() - a.docDate.getTime());
+
+    // Per-school rollup: how many documents each school holds and its most
+    // recent filing — the director's first read of repository coverage.
+    const schools = perSchool.map(({ school, docs }) => ({
+      id: school.id,
+      name: school.name,
+      total: docs.length,
+      current: docs.filter((d) => d.status === "Current").length,
+      latest: docs[0]?.docDate ?? null,
+    }));
+
+    // Document-type facet across the trust (Policy, Record, Training, …), so the
+    // repository can be read by kind, not just by school.
+    const typeCounts = new Map<string, number>();
+    for (const d of documents) {
+      typeCounts.set(d.type, (typeCounts.get(d.type) ?? 0) + 1);
+    }
+    const types = [...typeCounts.entries()]
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      totals: {
+        schools: schools.length,
+        documents: documents.length,
+        current: documents.filter((d) => d.status === "Current").length,
+      },
+      schools,
+      types,
+      documents,
+    };
+  }),
+
   // The org vault (spec 5.9): policies, records and generated documents.
   vault: tenancyProcedure
     .input(z.object({ schoolId: z.string().min(1).optional() }))

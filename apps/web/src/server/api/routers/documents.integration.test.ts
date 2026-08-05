@@ -122,6 +122,105 @@ describe("documents.evidencePack", () => {
   });
 });
 
+describe("documents.trustVault", () => {
+  let trustId: string;
+  let tvA: string;
+  let tvB: string;
+  let director: User;
+  let tvDsl: User;
+
+  beforeAll(async () => {
+    const trust = await systemDb.trust.create({
+      data: { name: `Doc Trust ${run}`, slug: `doc-trust-${run}` },
+    });
+    trustId = trust.id;
+    const a = await systemDb.tenant.create({
+      data: { name: "TV North", slug: `tv-a-${run}`, trustId },
+    });
+    const b = await systemDb.tenant.create({
+      data: { name: "TV South", slug: `tv-b-${run}`, trustId },
+    });
+    tvA = a.id;
+    tvB = b.id;
+    director = await systemDb.user.create({
+      data: { email: `tv-dir-${run}@t.test`, role: "DIRECTOR", trustId },
+    });
+    tvDsl = await systemDb.user.create({
+      data: { email: `tv-dsl-${run}@a.test`, role: "DSL", tenantId: tvA },
+    });
+
+    await systemDb.document.createMany({
+      data: [
+        {
+          tenantId: tvA,
+          scope: "ORG",
+          title: "North CP Policy",
+          type: "Policy",
+          docDate: new Date("2025-09-01"),
+          status: "Current",
+          themes: ["policy"],
+          summary: "x",
+          content: "x",
+          source: "seed",
+        },
+        {
+          tenantId: tvB,
+          scope: "ORG",
+          title: "South CP Policy",
+          type: "Policy",
+          docDate: new Date("2026-02-01"),
+          status: "Current",
+          themes: ["policy"],
+          summary: "x",
+          content: "x",
+          source: "seed",
+        },
+        {
+          tenantId: tvB,
+          scope: "ORG",
+          title: "South Training Record",
+          type: "Training",
+          docDate: new Date("2025-10-01"),
+          status: "Filed",
+          themes: ["training"],
+          summary: "x",
+          content: "x",
+          source: "seed",
+        },
+      ],
+    });
+  });
+
+  afterAll(async () => {
+    const ids = [tvA, tvB];
+    await systemDb.document.deleteMany({ where: { tenantId: { in: ids } } });
+    await systemDb.user.deleteMany({
+      where: { id: { in: [director.id, tvDsl.id] } },
+    });
+    await systemDb.tenant.deleteMany({ where: { id: { in: ids } } });
+    await systemDb.trust.deleteMany({ where: { id: trustId } });
+  });
+
+  it("rolls up every school's documents for a director", async () => {
+    const caller = createCaller(await ctxFor(director));
+    const vault = await caller.documents.trustVault();
+    expect(vault.totals.schools).toBe(2);
+    expect(vault.totals.documents).toBe(3);
+    expect(vault.schools.find((s) => s.name === "TV South")!.total).toBe(2);
+    // Merged list is sorted newest first, across schools.
+    expect(vault.documents[0]!.title).toBe("South CP Policy");
+    // Type facet spans the trust.
+    expect(vault.types.find((t) => t.type === "Policy")!.count).toBe(2);
+  });
+
+  it("denies a DSL the trust repository", async () => {
+    const caller = createCaller(await ctxFor(tvDsl));
+    await expect(caller.documents.trustVault()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
+
 describe("RLS", () => {
   it("keeps documents scoped to their school", async () => {
     const docs = await dbForTenant(otherSchoolId).document.findMany({
