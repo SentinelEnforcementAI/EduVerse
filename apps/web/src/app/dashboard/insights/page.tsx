@@ -1,20 +1,37 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, Network } from "lucide-react";
+import {
+  Activity,
+  CalendarX,
+  ChevronRight,
+  GraduationCap,
+  HeartPulse,
+  Network,
+  type LucideIcon,
+} from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
 import { Card } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
+import { ConcernTrend } from "./concern-trend";
 import {
-  AreaTrend,
   BarList,
   CohortLens,
   LevelDonut,
   Outcomes,
   StatTile,
 } from "./insight-charts";
+
+// A domain gets an icon so the "what's driving concern" list reads at a glance.
+const DOMAIN_ICON: Record<string, LucideIcon> = {
+  attendance: CalendarX,
+  behaviour: Activity,
+  attainment: GraduationCap,
+  "cross-domain": Network,
+  wellbeing: HeartPulse,
+};
 
 // Insights (head of safeguarding / director): the trust caseload as trends and
 // cohorts — volume over time, the escalation-level mix, which domains drive
@@ -79,23 +96,18 @@ export default async function InsightsPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Concern volume over time */}
+        {/* New concerns surfaced over time */}
         <Card className="p-5">
-          <h2 className="text-base font-semibold">Concern volume</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Active concerns by the month they surfaced, across the trust.
-          </p>
-          <div className="mt-4">
-            <AreaTrend
-              labels={insights.volumeByMonth.labels}
-              values={insights.volumeByMonth.values}
-            />
-          </div>
+          <ConcernTrend
+            labels={insights.volumeByMonth.labels}
+            values={insights.volumeByMonth.values}
+            currentLabel={insights.volumeByMonth.labels.at(-1) ?? ""}
+          />
         </Card>
 
-        {/* Escalation-level mix */}
+        {/* Active caseload by level */}
         <Card className="p-5">
-          <h2 className="text-base font-semibold">Escalation-level mix</h2>
+          <h2 className="text-base font-[650]">Active caseload by level</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Where the live caseload sits. A level, never a score.
           </p>
@@ -111,31 +123,57 @@ export default async function InsightsPage() {
 
         {/* Domains driving concern */}
         <Card className="p-5">
-          <h2 className="text-base font-semibold">What&apos;s driving concern</h2>
+          <h2 className="text-base font-[650]">What&apos;s driving concern</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Active concerns by domain.
+            Active concerns by domain. Cross-domain patterns — the ones no single
+            signal explains — are marked.
           </p>
           <div className="mt-4">
             {insights.domainMix.length ? (
-              <BarList
-                rows={insights.domainMix.map((d) => ({
-                  label: d.label,
-                  value: d.count,
-                  href: triage({ domain: d.key }),
-                }))}
-              />
+              (() => {
+                const domainTotal = insights.domainMix.reduce(
+                  (n, d) => n + d.count,
+                  0,
+                );
+                return (
+                  <BarList
+                    rows={insights.domainMix.map((d) => ({
+                      label: d.label,
+                      value: d.count,
+                      percent: domainTotal ? d.count / domainTotal : 0,
+                      icon: DOMAIN_ICON[d.key],
+                      striped: d.key === "cross-domain",
+                      href: triage({ domain: d.key }),
+                    }))}
+                  />
+                );
+              })()
             ) : (
               <p className="text-sm text-muted-foreground">No active concerns.</p>
             )}
           </div>
         </Card>
 
-        {/* Decision outcomes */}
+        {/* Human decisions this term */}
         <Card className="p-5">
-          <h2 className="text-base font-semibold">Decision outcomes</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            How the caseload has been worked. Watch never closes a case.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-[650]">Human decisions this term</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Outcomes recorded by safeguarding professionals. Sentinel Watch
+                never closes a case.
+              </p>
+            </div>
+            <span className="whitespace-nowrap rounded-md bg-paper px-2 py-1 text-xs font-medium text-ink">
+              {(
+                insights.outcomes.open +
+                insights.outcomes.confirmed +
+                insights.outcomes.escalated +
+                insights.outcomes.dismissed
+              ).toLocaleString("en-GB")}{" "}
+              decisions
+            </span>
+          </div>
           <div className="mt-4">
             <Outcomes
               outcomes={insights.outcomes}

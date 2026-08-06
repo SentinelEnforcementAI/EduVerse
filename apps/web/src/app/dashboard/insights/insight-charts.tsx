@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { type LucideIcon } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 
@@ -43,98 +44,65 @@ export function StatTile({
   return <Card className="p-4">{inner}</Card>;
 }
 
-// Concern volume over time — a trend is a line, not a column of bars. A cobalt
-// line over a soft area fill, a node per month, the latest month picked out.
-// Baseline sits at zero so the shape of the trend is honest, never exaggerated.
-export function AreaTrend({ labels, values }: { labels: string[]; values: number[] }) {
-  const w = 320;
-  const h = 120;
-  const pad = { top: 14, right: 8, bottom: 6, left: 8 };
-  const max = Math.max(1, ...values);
-  const n = values.length;
-  const x = (i: number) =>
-    pad.left + (n <= 1 ? 0 : (i / (n - 1)) * (w - pad.left - pad.right));
-  const y = (v: number) => pad.top + (1 - v / max) * (h - pad.top - pad.bottom);
-  const base = h - pad.bottom;
-  const line = values
-    .map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
-    .join(" ");
-  const area = `${line} L${x(n - 1).toFixed(1)},${base} L${x(0).toFixed(1)},${base} Z`;
-  return (
-    <div>
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        className="w-full"
-        role="img"
-        aria-label="Concern volume by month"
-      >
-        <defs>
-          <linearGradient id="area-cobalt" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--cobalt)" stopOpacity="0.26" />
-            <stop offset="100%" stopColor="var(--cobalt)" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill="url(#area-cobalt)" />
-        <path
-          d={line}
-          fill="none"
-          stroke="var(--cobalt)"
-          strokeWidth="2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-        {values.map((v, i) => (
-          <circle
-            key={i}
-            cx={x(i)}
-            cy={y(v)}
-            r={i === n - 1 ? 3.5 : 2.5}
-            fill={i === n - 1 ? "var(--cobalt)" : "var(--card)"}
-            stroke="var(--cobalt)"
-            strokeWidth="1.5"
-          >
-            <title>{`${labels[i]}: ${v}`}</title>
-          </circle>
-        ))}
-      </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-        {labels.map((l, i) => (
-          <span key={i} className={i === n - 1 ? "font-medium text-ink" : ""}>
-            {l}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// A horizontal magnitude list — one hue, length encodes the count. A row with
-// an `href` becomes a link to the concerns behind it.
+// A horizontal magnitude list — length encodes the count, over a light track.
+// Rows can carry a percentage, a leading icon and a `striped` treatment (used to
+// mark cross-domain patterns, Sentinel's distinctive signal). A row with an
+// `href` becomes a link to the concerns behind it.
 export function BarList({
   rows,
   unit,
 }: {
-  rows: { label: string; value: number; note?: string; href?: string }[];
+  rows: {
+    label: string;
+    value: number;
+    note?: string;
+    href?: string;
+    percent?: number;
+    icon?: LucideIcon;
+    striped?: boolean;
+  }[];
   unit?: string;
 }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <ul className="space-y-2.5">
       {rows.map((r) => {
+        const Icon = r.icon;
         const body = (
           <>
             <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="truncate group-hover:text-cobalt">{r.label}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                {Icon ? (
+                  <Icon
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                ) : null}
+                <span className="truncate group-hover:text-cobalt">{r.label}</span>
+              </span>
               <span className="shrink-0 tabular-nums text-muted-foreground">
-                {r.value}
+                <span className="font-medium text-ink">
+                  {r.value.toLocaleString("en-GB")}
+                </span>
                 {unit ? ` ${unit}` : ""}
+                {typeof r.percent === "number"
+                  ? `  ${Math.round(r.percent * 100)}%`
+                  : ""}
                 {r.note ? ` · ${r.note}` : ""}
               </span>
             </div>
             <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-paper">
               <div
                 className="h-full rounded-full bg-cobalt"
-                style={{ width: `${(r.value / max) * 100}%` }}
+                style={{
+                  width: `${(r.value / max) * 100}%`,
+                  ...(r.striped
+                    ? {
+                        backgroundImage:
+                          "repeating-linear-gradient(45deg, var(--cobalt) 0 4px, color-mix(in srgb, var(--cobalt) 55%, white) 4px 8px)",
+                      }
+                    : {}),
+                }}
               />
             </div>
           </>
@@ -189,17 +157,20 @@ export function LevelDonut({
       count: m.count,
     };
   });
+  const pct = (n: number) =>
+    total === 0 ? "0%" : n / total < 0.01 ? "<1%" : `${Math.round((n / total) * 100)}%`;
+
   return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-7">
-      <div className="relative size-32 shrink-0">
-        <svg viewBox="0 0 100 100" className="size-32 -rotate-90">
+    <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
+      <div className="relative size-40 shrink-0">
+        <svg viewBox="0 0 100 100" className="size-40 -rotate-90">
           <circle
             cx="50"
             cy="50"
             r={r}
             fill="none"
             stroke="var(--cloud)"
-            strokeWidth="12"
+            strokeWidth="11"
           />
           {segments.map((s) => (
             <circle
@@ -209,7 +180,7 @@ export function LevelDonut({
               r={r}
               fill="none"
               stroke={LEVEL_STYLE[s.level]!.bg}
-              strokeWidth="12"
+              strokeWidth="11"
               strokeDasharray={`${s.dash} ${circumference - s.dash}`}
               strokeDashoffset={-s.offset}
             >
@@ -218,14 +189,20 @@ export function LevelDonut({
           ))}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-semibold tabular-nums">{total}</span>
+          <span className="text-3xl font-semibold tabular-nums">
+            {total.toLocaleString("en-GB")}
+          </span>
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
             Concerns
           </span>
         </div>
       </div>
-      <ul className="grid w-full grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-1">
+      {/* Legend vertically centred against the ring, count + percentage, with
+          the statutory row given an emphasised callout since it is often a
+          sliver in the ring. */}
+      <ul className="w-full space-y-1.5 self-center">
         {mix.map((m) => {
+          const statutory = m.level === 4 && m.count > 0;
           const row = (
             <>
               <span
@@ -233,23 +210,35 @@ export function LevelDonut({
                 className="size-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: LEVEL_STYLE[m.level]!.bg }}
               />
-              <span className="text-muted-foreground group-hover:text-cobalt">
+              <span
+                className={
+                  statutory
+                    ? "font-medium text-ink group-hover:text-cobalt"
+                    : "text-muted-foreground group-hover:text-cobalt"
+                }
+              >
                 {LEVEL_STYLE[m.level]!.label}
               </span>
-              <span className="ml-auto tabular-nums font-medium">{m.count}</span>
+              <span className="ml-auto tabular-nums font-medium">
+                {m.count.toLocaleString("en-GB")}
+              </span>
+              <span className="w-10 shrink-0 text-right tabular-nums text-xs text-muted-foreground">
+                {pct(m.count)}
+              </span>
             </>
           );
+          const cls = `group flex items-center gap-2 rounded-md px-2 py-1 text-sm ${statutory ? "border border-risk/30 bg-risk-tint/40" : ""}`;
           return (
             <li key={m.level}>
               {m.href ? (
                 <Link
                   href={m.href}
-                  className="group flex items-center gap-2 rounded-md text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={`${cls} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                 >
                   {row}
                 </Link>
               ) : (
-                <div className="flex items-center gap-2 text-sm">{row}</div>
+                <div className={cls}>{row}</div>
               )}
             </li>
           );
@@ -261,10 +250,10 @@ export function LevelDonut({
 
 // Decision outcomes — the caseload's health as a proportion bar with a legend.
 const OUTCOME_STYLE: { key: string; label: string; bg: string }[] = [
-  { key: "open", label: "Awaiting", bg: "var(--cobalt)" },
-  { key: "confirmed", label: "Confirmed", bg: "var(--success-green)" },
-  { key: "escalated", label: "Escalated", bg: "var(--warning-amber)" },
-  { key: "dismissed", label: "Dismissed", bg: "var(--muted-foreground)" },
+  { key: "open", label: "Awaiting decision", bg: "var(--cobalt)" },
+  { key: "confirmed", label: "Concern confirmed", bg: "var(--success-green)" },
+  { key: "escalated", label: "Escalated externally", bg: "var(--warning-amber)" },
+  { key: "dismissed", label: "Dismissed with reason", bg: "var(--muted-foreground)" },
 ];
 
 export function Outcomes({
