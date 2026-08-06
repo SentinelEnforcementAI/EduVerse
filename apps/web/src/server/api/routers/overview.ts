@@ -10,6 +10,7 @@ import {
 } from "@/server/api/trpc";
 import { recordAuditEvent } from "@/server/audit";
 import { escalationLevel, type EscalationLevel } from "@/server/escalation";
+import { domainOfRule } from "@/server/insights";
 import { sealPupilRef } from "@/server/identity";
 
 type LevelCounts = Record<EscalationLevel, number>;
@@ -203,6 +204,17 @@ export const overviewRouter = createTRPCRouter({
     const rows = await Promise.all(
       ctx.tenancy.schools.map(async (s) => {
         const { db } = dbForSchool(ctx.tenancy, s.id);
+        // All active signals, to count how many contribute to each pupil's
+        // concern (the sealed "N contributing signals" on a row).
+        const active = await db.signal.findMany({
+          where: { status: { in: ["OPEN", "CONFIRMED", "ESCALATED"] } },
+          select: { pupilId: true },
+        });
+        const contributing = new Map<string, number>();
+        for (const a of active) {
+          contributing.set(a.pupilId, (contributing.get(a.pupilId) ?? 0) + 1);
+        }
+
         const signals = await db.signal.findMany({
           where: {
             status: { in: ["OPEN", "CONFIRMED", "ESCALATED"] },
@@ -215,6 +227,7 @@ export const overviewRouter = createTRPCRouter({
             serious: true,
             windowEnd: true,
             pupilId: true,
+            ruleVersion: { select: { key: true } },
           },
           orderBy: [{ serious: "desc" }, { severity: "desc" }, { updatedAt: "desc" }],
           take: 50,
@@ -235,7 +248,12 @@ export const overviewRouter = createTRPCRouter({
               yearGroup: pupil.yearGroup,
               headline: sig.title,
               level: escalationLevel(sig.severity, sig.serious),
+              domain: domainOfRule(sig.ruleVersion.key).label,
+              signalCount: contributing.get(sig.pupilId) ?? 1,
               windowEnd: sig.windowEnd,
+              // Time the concern has been waiting for a decision, computed here
+              // (a resolver, not a component) so the value is stable per request.
+              waitingMs: Math.max(0, Date.now() - sig.windowEnd.getTime()),
             },
           ];
         });

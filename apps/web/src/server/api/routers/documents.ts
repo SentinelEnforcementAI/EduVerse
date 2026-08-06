@@ -40,6 +40,9 @@ export const documentsRouter = createTRPCRouter({
         .object({
           schoolId: z.string().min(1).optional(),
           type: z.string().min(1).optional(),
+          // A real status (e.g. "Current") or the special "review" for the
+          // needs-review set.
+          status: z.string().min(1).optional(),
         })
         .optional(),
     )
@@ -50,7 +53,11 @@ export const documentsRouter = createTRPCRouter({
           message: "The trust repository is available to trust leadership only.",
         });
       }
-      const applied = { schoolId: input?.schoolId, type: input?.type };
+      const applied = {
+        schoolId: input?.schoolId,
+        type: input?.type,
+        status: input?.status,
+      };
 
       const perSchool = await Promise.all(
         ctx.tenancy.schools.map(async (s) => {
@@ -64,8 +71,16 @@ export const documentsRouter = createTRPCRouter({
         }),
       );
 
+      // A document needs review when it is no longer marked Current, or when its
+      // last review is over a year old — the governance question a director asks
+      // of the repository. (Annual review is the safeguarding norm.)
+      const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+      const nowMs = Date.now();
+      const needsReview = (status: string, docDate: Date) =>
+        status !== "Current" || nowMs - docDate.getTime() > YEAR_MS;
+
       // The full trust set drives the facets and rollup; the display list is
-      // then filtered by the chosen school and document type.
+      // then filtered by the chosen school, document type and status.
       const all = perSchool
         .flatMap(({ school, docs }) =>
           docs.map((d) => ({
@@ -78,6 +93,7 @@ export const documentsRouter = createTRPCRouter({
             docDate: d.docDate,
             themes: d.themes,
             summary: d.summary,
+            reviewDue: needsReview(d.status, d.docDate),
           })),
         )
         .sort((a, b) => b.docDate.getTime() - a.docDate.getTime());
@@ -85,38 +101,52 @@ export const documentsRouter = createTRPCRouter({
       const documents = all.filter(
         (d) =>
           (!applied.schoolId || d.schoolId === applied.schoolId) &&
-          (!applied.type || d.type === applied.type),
+          (!applied.type || d.type === applied.type) &&
+          (!applied.status ||
+            (applied.status === "review"
+              ? d.reviewDue
+              : d.status === applied.status)),
       );
 
-      // Per-school rollup: how many documents each school holds and its most
-      // recent filing — the director's first read of repository coverage.
+      // Per-school rollup: coverage, how many are current, how many need review,
+      // and the most recent filing — the director's read of repository health.
       const schools = perSchool.map(({ school, docs }) => ({
         id: school.id,
         name: school.name,
         total: docs.length,
         current: docs.filter((d) => d.status === "Current").length,
+        needsReview: docs.filter((d) => needsReview(d.status, d.docDate)).length,
         latest: docs[0]?.docDate ?? null,
       }));
 
-      // Document-type facet across the trust (Policy, Record, Training, …), from
-      // the unfiltered set so the filter options never collapse to the current
-      // selection.
+      // Facets from the unfiltered set so the filter options never collapse to
+      // the current selection.
       const typeCounts = new Map<string, number>();
+      const statusCounts = new Map<string, number>();
       for (const d of all) {
         typeCounts.set(d.type, (typeCounts.get(d.type) ?? 0) + 1);
+        statusCounts.set(d.status, (statusCounts.get(d.status) ?? 0) + 1);
       }
       const types = [...typeCounts.entries()]
         .map(([type, count]) => ({ type, count }))
         .sort((a, b) => b.count - a.count);
+      const statuses = [...statusCounts.entries()]
+        .map(([status, count]) => ({ status, count }))
+        .sort((a, b) => b.count - a.count);
+
+      const current = all.filter((d) => d.status === "Current").length;
+      const reviewCount = all.filter((d) => d.reviewDue).length;
 
       return {
         totals: {
           schools: schools.length,
           documents: all.length,
-          current: all.filter((d) => d.status === "Current").length,
+          current,
+          needsReview: reviewCount,
         },
         schools,
         types,
+        statuses,
         documents,
         total: all.length,
         shown: documents.length,

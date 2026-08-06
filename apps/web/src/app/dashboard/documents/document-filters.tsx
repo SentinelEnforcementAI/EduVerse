@@ -8,13 +8,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 export function DocumentFilters({
   schools,
   types,
+  statuses,
   applied,
   shown,
   total,
 }: {
   schools: { id: string; name: string }[];
   types: { type: string; count: number }[];
-  applied: { schoolId?: string; type?: string };
+  statuses: { status: string; count: number }[];
+  applied: { schoolId?: string; type?: string; status?: string };
   shown: number;
   total: number;
 }) {
@@ -29,7 +31,7 @@ export function DocumentFilters({
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   }
 
-  const hasFilter = Boolean(applied.schoolId || applied.type);
+  const hasFilter = Boolean(applied.schoolId || applied.type || applied.status);
   const selectClass =
     "rounded-lg border border-cloud bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -59,6 +61,21 @@ export function DocumentFilters({
         {types.map((t) => (
           <option key={t.type} value={t.type}>
             {t.type} ({t.count})
+          </option>
+        ))}
+      </select>
+
+      <select
+        aria-label="Status"
+        value={applied.status ?? ""}
+        onChange={(e) => set("status", e.target.value)}
+        className={selectClass}
+      >
+        <option value="">All statuses</option>
+        <option value="review">Needs review</option>
+        {statuses.map((s) => (
+          <option key={s.status} value={s.status}>
+            {s.status} ({s.count})
           </option>
         ))}
       </select>
