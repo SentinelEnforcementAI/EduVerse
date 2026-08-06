@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../../../shell/breadcrumbs";
+import { DocumentUpload } from "../../../../shell/document-upload";
 import { LevelChip } from "../../../../shell/level-chip";
 import { CaseMenu, RevealControl, NoteForm } from "./case-actions";
 import { CommsPanel } from "./case-comms";
@@ -238,7 +239,15 @@ export default async function CaseViewPage({
 
           {/* Linked documents — compact table */}
           <section>
-            <h2 className="text-lg font-[650]">Linked documents</h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h2 className="text-lg font-[650]">Linked documents</h2>
+              <DocumentUpload
+                scope="CASE"
+                schoolId={schoolId}
+                signalId={signalId}
+                label="Add document"
+              />
+            </div>
             <p className="mt-1 text-sm text-muted-foreground">
               Filed letters, records and referrals for this pupil, sealed by
               construction. Trust policies sit in the{" "}

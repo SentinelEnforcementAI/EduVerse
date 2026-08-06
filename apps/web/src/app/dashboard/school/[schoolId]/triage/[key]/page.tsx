@@ -8,6 +8,7 @@ import { Breadcrumbs } from "../../../../shell/breadcrumbs";
 import { TriageFilters } from "../../../../shell/triage-filters";
 import { TriageList } from "../../../../shell/triage-list";
 import { parseTriageFilters } from "../../../../shell/triage-params";
+import { RaiseConcernDialog } from "./raise-concern-dialog";
 
 const KEYS = ["active", "awaiting"] as const;
 type Key = (typeof KEYS)[number];
@@ -69,6 +70,7 @@ export default async function SchoolTriagePage({
         subtitle={data.subtitle}
         rows={data.rows}
         showSchool={false}
+        action={<RaiseConcernDialog schoolId={schoolId} />}
         caseHref={(row) => `/dashboard/school/${row.schoolId}/case/${row.id}`}
         filters={
           <TriageFilters

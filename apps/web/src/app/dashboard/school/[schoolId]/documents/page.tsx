@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../../shell/breadcrumbs";
+import { DocumentUpload } from "../../../shell/document-upload";
 import { DocTypeIcon } from "./doc-icon";
 import { DocumentSearch } from "./document-search";
 import { EvidencePackButton } from "./evidence-pack";
@@ -66,6 +67,11 @@ export default async function DocumentsPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <DocumentUpload
+            scope="ORG"
+            schoolId={schoolId}
+            label="Upload to repository"
+          />
           <TrainingReader schoolId={schoolId} />
           <EvidencePackButton schoolId={schoolId} />
         </div>

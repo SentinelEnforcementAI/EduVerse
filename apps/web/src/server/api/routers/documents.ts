@@ -392,4 +392,107 @@ Every read and change against a child's record is logged in the audit trail. Pup
       });
       return { id: doc.id };
     }),
+
+  // Upload a document into the repository (scope ORG) or onto a concern's case
+  // file (scope CASE). A DSL or director action, always audited and tenant-
+  // scoped. An optional image file is stored inline as a data: URL (the same
+  // mechanism the seeded case documents use); a typed note becomes the
+  // searchable text of record. Identity stays sealed — a case document carries
+  // the pupil link, never a name.
+  //
+  // CTO-DECISION: production stores the original file in S3 (eu-west-2) and
+  // keeps only a reference here. The inline data URL is the simplest working
+  // version and matches the existing imageDataUrl precedent; images only, and
+  // size-capped, so a stray upload can't bloat a row.
+  uploadDocument: tenancyProcedure
+    .input(
+      z.object({
+        scope: z.enum(["ORG", "CASE"]),
+        schoolId: z.string().min(1).optional(),
+        signalId: z.string().min(1).optional(),
+        title: z.string().trim().min(2).max(200),
+        type: z.string().trim().min(2).max(60),
+        note: z.string().trim().max(8000).optional(),
+        fileDataUrl: z
+          .string()
+          .max(4_400_000)
+          .regex(
+            /^data:image\/(png|jpe?g|webp|gif);base64,/,
+            "Only PNG, JPEG, WEBP or GIF images can be uploaded.",
+          )
+          .optional(),
+        fileName: z.string().trim().max(200).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = schoolFor(ctx.tenancy, input.schoolId);
+      const userId = ctx.session.user.id;
+
+      // A repository upload with no note and no file has no substance.
+      if (!input.note && !input.fileDataUrl) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Add a note or attach a file.",
+        });
+      }
+
+      let signalId: string | null = null;
+      let pupilId: string | null = null;
+      if (input.scope === "CASE") {
+        if (!input.signalId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A case document must attach to a concern.",
+          });
+        }
+        const signal = await db.signal.findUnique({
+          where: { id: input.signalId },
+          select: { id: true, pupilId: true },
+        });
+        if (!signal) throw new TRPCError({ code: "NOT_FOUND" });
+        signalId = signal.id;
+        pupilId = signal.pupilId;
+      }
+
+      const ukDateShort = (d: Date) => d.toLocaleDateString("en-GB");
+      const summary =
+        input.note?.replace(/\s+/g, " ").slice(0, 200) ||
+        `Uploaded to the ${input.scope === "ORG" ? "repository" : "case file"} on ${ukDateShort(new Date())}.`;
+      const content =
+        input.note?.trim() ||
+        `Document uploaded to the ${input.scope === "ORG" ? "repository" : "case file"}${input.fileName ? ` (${input.fileName})` : ""}. The image is held in Sentinel Watch; the original file is available on request.`;
+
+      const doc = await db.document.create({
+        data: {
+          tenantId: school.id,
+          scope: input.scope,
+          signalId,
+          pupilId,
+          title: input.title,
+          type: input.type,
+          docDate: new Date(),
+          status: "Filed",
+          themes: ["uploaded"],
+          summary,
+          content,
+          imageDataUrl: input.fileDataUrl ?? null,
+          generated: false,
+          source: "upload",
+        },
+      });
+      await recordAuditEvent(db, {
+        tenantId: school.id,
+        userId,
+        action: "document.uploaded",
+        entityType: input.scope === "CASE" ? "signal" : "document",
+        entityId: input.scope === "CASE" ? signalId! : doc.id,
+        pupilId: pupilId ?? undefined,
+        metadata: {
+          scope: input.scope,
+          type: input.type,
+          hasFile: Boolean(input.fileDataUrl),
+        },
+      });
+      return { id: doc.id };
+    }),
 });

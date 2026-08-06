@@ -37,6 +37,7 @@ export function TriageList({
   caseHref,
   tabs,
   filters,
+  action,
 }: {
   title: string;
   subtitle: string;
@@ -45,12 +46,16 @@ export function TriageList({
   caseHref: (row: TriageRow) => string;
   tabs?: TriageTab[];
   filters?: ReactNode;
+  action?: ReactNode;
 }) {
   return (
     <div>
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-1 text-base text-muted-foreground">{subtitle}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="mt-1 text-base text-muted-foreground">{subtitle}</p>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
 
       {tabs && tabs.length > 0 ? (

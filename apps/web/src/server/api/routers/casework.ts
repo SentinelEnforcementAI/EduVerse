@@ -42,6 +42,28 @@ function ukDate(date: Date): string {
 
 const commTypeEnum = z.enum(COMM_TYPES as [CommType, ...CommType[]]);
 
+// ── Manually raised concerns ────────────────────────────────────────────────
+// A concern a DSL raises by hand — a disclosure in the corridor, a call from a
+// parent, something the engine never saw. It becomes a first-class, sealed
+// signal that flows through the same triage → decision → audit path as an
+// engine signal, so the human-in-the-loop workflow is identical. The only
+// difference is provenance: the signal references a shared "manual" rule
+// version, and its reasoning records who raised it.
+const MANUAL_RULE_KEY = "manual.concern";
+const MANUAL_RULE_VERSION = 1;
+
+// The DSL chooses a proportionate level; it maps to the engine's severity /
+// serious pair exactly as escalationLevel() reads it back (level 4 = serious).
+function levelToSeverity(level: 1 | 2 | 3 | 4): {
+  severity: number;
+  serious: boolean;
+} {
+  if (level === 4) return { severity: 3, serious: true };
+  if (level === 3) return { severity: 3, serious: false };
+  if (level === 2) return { severity: 2, serious: false };
+  return { severity: 1, serious: false };
+}
+
 // Resolves the school a case action targets: a DSL's single school, or the
 // school a director names. Shared by the case query and every mutation.
 function resolveSchoolId(
@@ -763,6 +785,136 @@ export const caseworkRouter = createTRPCRouter({
         return note.id;
       });
       return { id: noteId };
+    }),
+
+  // Raise a concern by hand (human-in-the-loop: a person flags, the same
+  // workflow decides). The pupil is identified by their UPN — the school's own
+  // identifier — so identity stays sealed: the DSL knows the child, the system
+  // only ever shows the sealed reference. The resulting signal is
+  // indistinguishable in the workflow from an engine signal; only its
+  // provenance differs. Append-only and audited.
+  raiseConcern: tenancyProcedure
+    .input(
+      z.object({
+        schoolId: z.string().min(1).optional(),
+        upn: z.string().trim().min(1).max(40),
+        level: z.number().int().min(1).max(4),
+        title: z.string().trim().min(3).max(200),
+        reason: z.string().trim().min(5).max(4000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { school, db } = dbForSchool(
+        ctx.tenancy,
+        resolveSchoolId(ctx.tenancy, input.schoolId),
+      );
+
+      // Resolve the pupil within this school's own RLS scope. A UPN that isn't
+      // on this school's roll simply doesn't resolve — there is no cross-school
+      // lookup, and the roll itself is never enumerated to the caller.
+      const needle = input.upn.replace(/\s+/g, "").toUpperCase();
+      const pupil = await db.pupil.findFirst({
+        where: { upn: { equals: needle, mode: "insensitive" } },
+        select: { id: true, upn: true },
+      });
+      if (!pupil) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message:
+            "No pupil with that UPN on this school's roll. Check the number in your MIS.",
+        });
+      }
+
+      const level = input.level as 1 | 2 | 3 | 4;
+      const { severity, serious } = levelToSeverity(level);
+      const userId = ctx.session.user.id;
+      const author = await db.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+      const today = new Date();
+      const reasoning = {
+        summary: input.reason,
+        metrics: {
+          "Concern level": LEVEL_META[level].meaning,
+          "Raised by": author?.name ?? "DSL",
+          Source: "Raised by hand",
+        },
+        dataPoints: [
+          {
+            label: "Concern logged by the safeguarding team",
+            date: today.toISOString(),
+            value: input.reason,
+          },
+        ],
+        manual: true,
+      };
+
+      const signalId = await systemTransaction(async (tx) => {
+        // The shared "manual" rule version, created once and reused.
+        const rule = await tx.ruleVersion.upsert({
+          where: {
+            key_version: {
+              key: MANUAL_RULE_KEY,
+              version: MANUAL_RULE_VERSION,
+            },
+          },
+          update: {},
+          create: {
+            key: MANUAL_RULE_KEY,
+            version: MANUAL_RULE_VERSION,
+            name: "Manually raised concern",
+            description:
+              "A concern raised by hand by a designated safeguarding professional, outside the automated engine.",
+            params: {},
+            active: true,
+          },
+        });
+        // A real execution row so the signal's provenance is an audited event,
+        // not a dangling reference.
+        const execution = await tx.ruleExecution.create({
+          data: {
+            tenantId: school.id,
+            status: "SUCCEEDED",
+            asOf: today,
+            finishedAt: today,
+            stats: { manual: true, raisedBy: userId },
+          },
+        });
+        const signal = await tx.signal.create({
+          data: {
+            tenantId: school.id,
+            pupilId: pupil.id,
+            ruleVersionId: rule.id,
+            executionId: execution.id,
+            status: "OPEN",
+            severity,
+            serious,
+            title: input.title,
+            reasoning,
+            windowStart: today,
+            windowEnd: today,
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            tenantId: school.id,
+            userId,
+            action: "concern.manually_raised",
+            entityType: "signal",
+            entityId: signal.id,
+            pupilId: pupil.id,
+            metadata: { level, serious },
+          },
+        });
+        return signal.id;
+      });
+
+      return {
+        signalId,
+        schoolId: school.id,
+        ref: sealPupilRef(pupil.upn),
+      };
     }),
 
   // Draft a comm for a case (spec 5.6). Deterministic content built from the
