@@ -19,7 +19,12 @@ type Hero = {
   reasoning: {
     summary: string;
     metrics: Record<string, string | number>;
-    dataPoints: { date: string; label: string; src: string }[];
+    dataPoints: {
+      date: string;
+      label: string;
+      src: string;
+      recordedBy?: string;
+    }[];
   };
 };
 
@@ -42,18 +47,21 @@ const HEROES: Hero[] = [
       dataPoints: [
         {
           date: "2026-04-23",
-          label: "Withdrawn and anxious on phone",
+          label: "Withdrawn and anxious while using phone",
           src: "Pastoral / Watch entry",
+          recordedBy: "Pastoral Lead",
         },
         {
           date: "2026-04-25",
-          label: "Secretive, hid device from staff",
+          label: "Secretive behaviour and device concealed from staff",
           src: "Behaviour / Bromcom",
+          recordedBy: "J. Harris",
         },
         {
           date: "2026-04-27",
-          label: "Disclosed an unknown adult asked for images online",
+          label: "Disclosure that an unknown adult requested images online",
           src: "Pastoral / Watch entry",
+          recordedBy: "DSL",
         },
       ],
     },

@@ -92,6 +92,9 @@ type SignalReasoning = {
     date?: string;
     value?: string | number;
     src?: string;
+    // Optional attribution: the professional/role who made the record. Present
+    // on hand-crafted cases; absent (null) on rule-generated ones.
+    recordedBy?: string;
   }[];
 };
 
@@ -424,6 +427,9 @@ export const caseworkRouter = createTRPCRouter({
         ...new Set([
           ...notes.flatMap((n) => [n.authorId, ...n.taggedUserIds]),
           ...reviews.flatMap((r) => [r.createdById, ...r.attendees]),
+          ...auditEvents
+            .map((e) => e.userId)
+            .filter((id): id is string => Boolean(id)),
         ]),
       ];
       const users = referencedUserIds.length
@@ -502,6 +508,11 @@ export const caseworkRouter = createTRPCRouter({
         status: signal.status,
         confidence: confidenceBand(signal.severity),
         window: { start: signal.windowStart, end: signal.windowEnd },
+        // When the concern surfaced (window end), and how long it has been
+        // waiting for a decision. Computed here (a resolver, not a component)
+        // so the value is stable per request.
+        surfacedAt: signal.windowEnd,
+        waitingMs: Math.max(0, Date.now() - signal.windowEnd.getTime()),
         timeToSurface: surface,
         signalsLinked: reasoning.dataPoints.length,
         sources,
@@ -546,6 +557,7 @@ export const caseworkRouter = createTRPCRouter({
           date: p.date ?? null,
           label: p.label,
           source: p.src ?? source,
+          recordedBy: p.recordedBy ?? null,
         })),
         linked: siblings.map((s) => ({ id: s.id, headline: s.title })),
         notes: notes.map((n) => ({
@@ -604,6 +616,7 @@ export const caseworkRouter = createTRPCRouter({
         audit: auditEvents.map((e) => ({
           id: e.id,
           action: e.action,
+          by: (e.userId ? nameById.get(e.userId) : undefined) ?? "System",
           createdAt: e.createdAt,
         })),
       };

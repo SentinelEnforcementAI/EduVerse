@@ -1,16 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  Brain,
-  CalendarClock,
-  ChevronRight,
-  Clock,
-  FolderOpen,
-  Link2,
-  Network,
-  ScrollText,
-  Send,
-} from "lucide-react";
+import { ChevronRight, Lock } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -19,67 +9,57 @@ import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../../../../shell/breadcrumbs";
 import { LevelChip } from "../../../../shell/level-chip";
-import {
-  CaseMenu,
-  DismissForm,
-  NoteForm,
-  RevealControl,
-  SealedNotice,
-} from "./case-actions";
+import { CaseMenu, RevealControl, NoteForm } from "./case-actions";
 import { CommsPanel } from "./case-comms";
-import { CaseFilePanel, ReviewScheduler } from "./case-file";
+import { SnapshotPanel } from "./case-insight-panels";
+import { DecisionPanel } from "./case-decision";
+import { EvidenceTimeline, PupilContext } from "./case-evidence";
 import {
-  ContextFlags,
-  LifecycleStepper,
-  RiskFactorBreakdown,
-  SnapshotPanel,
-} from "./case-insight-panels";
-import { CaseReferral } from "./case-referral";
+  ContributingEvidence,
+  LinkedDocumentsTable,
+  StatusStrip,
+  WatchAnalysis,
+  type CaseStep,
+} from "./case-panels";
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString("en-GB", {
+function shortDate(d: Date): string {
+  return d.toLocaleDateString("en-GB", {
     day: "numeric",
-    month: "long",
+    month: "short",
     year: "numeric",
   });
 }
 
-function formatDay(iso: string | null) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-  });
+function waitingLabel(ms: number): string {
+  const mins = Math.max(0, Math.round(ms / 60000));
+  if (mins < 60) return `${mins} ${mins === 1 ? "minute" : "minutes"}`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+  const days = Math.round(hours / 24);
+  return `${days} ${days === 1 ? "day" : "days"}`;
 }
 
-// The rules engine keys its metrics in camelCase (attendancePctDrop,
-// signalsLinked). A DSL reading a case should see a plain-English label, not a
-// variable name, so we humanise the key: split camelCase and known acronyms,
-// then sentence-case it.
-const METRIC_LABELS: Record<string, string> = {
-  signalsLinked: "Signals linked",
-  daysToSurface: "Days to surface",
-  outOfHoursSignals: "Out-of-hours signals",
-  attendancePctDrop: "Attendance drop",
-  behaviourPointsSpike: "Behaviour points",
+// Friendly labels for the append-only audit actions, so the trail reads as
+// events a DSL recognises, not machine keys.
+const AUDIT_LABELS: Record<string, string> = {
+  "case.viewed": "Concern opened",
+  "pupil.identity.revealed": "Identity revealed",
+  "signal.dismissed": "Concern dismissed with reason",
+  "case.note.added": "Case note added",
+  "case.file.opened": "Case file opened",
+  "referral.submitted": "Referral prepared",
+  "review.scheduled": "Pastoral review scheduled",
 };
-
-function metricLabel(key: string): string {
-  if (METRIC_LABELS[key]) return METRIC_LABELS[key];
-  const words = key
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/\bPct\b/gi, "percentage")
-    .toLowerCase()
-    .trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+function auditLabel(action: string): string {
+  if (AUDIT_LABELS[action]) return AUDIT_LABELS[action]!;
+  const t = action.replace(/[._]/g, " ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-// Case view (spec 5.5), read-only. The explainability surfaces a DSL trusts:
-// header, time to surface, the signal timeline with source attribution, the
-// interpretation, the overall assessment, the escalation level with route and
-// rationale, linked context, and the case audit trail. Identity stays sealed;
-// the reveal, and the confirm / dismiss / note actions, arrive with the
-// human-in-the-loop slice.
+// The pupil concern workspace (spec 5.5): a focused safeguarding decision
+// screen. The narrative runs case summary → Watch analysis → evidence → human
+// decision → supporting record. Watch's reading is advisory throughout; every
+// decision is the DSL's and is audited. Identity stays sealed until revealed.
 export default async function CaseViewPage({
   params,
 }: {
@@ -105,6 +85,23 @@ export default async function CaseViewPage({
   const colleagues = await api.casework.directory({ schoolId });
   const isDirector = tenancy.mode === "mat";
 
+  // Status strip driven by real state — a stage is only marked when reached.
+  const decided = c.status !== "OPEN";
+  const actionRecorded =
+    c.referral.submitted || c.caseFile.opened || decided;
+  const steps: CaseStep[] = [
+    { label: "Raised", state: "done" },
+    { label: "Awaiting decision", state: decided ? "done" : "current" },
+    { label: "Action recorded", state: actionRecorded ? "done" : "pending" },
+    { label: "Reviewed", state: c.reviews.length > 0 ? "done" : "pending" },
+    { label: "Closed", state: c.status === "DISMISSED" ? "done" : "pending" },
+  ];
+
+  const pattern =
+    c.sources.length > 1
+      ? "Cross-domain pattern"
+      : `${c.interpretation.source} pattern`;
+
   return (
     <div>
       <Breadcrumbs
@@ -129,24 +126,32 @@ export default async function CaseViewPage({
         }
       />
 
-      {/* Header */}
+      {/* 1. Case header — a compact case summary */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {c.revealed && c.pupilName ? c.pupilName : c.ref}
-            </h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {c.revealed && c.pupilName ? c.pupilName : c.ref}
+          </h1>
+          <p className="mt-1 text-lg font-medium">{c.headline}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <LevelChip level={c.escalation.level} />
+            <span className="text-muted-foreground">
+              {c.escalation.meaning === "Statutory threshold"
+                ? "Statutory review required"
+                : c.escalation.meaning}
+            </span>
           </div>
-          <p className="mt-1 text-base text-muted-foreground">
-            Year {c.yearGroup} · {c.schoolName} ·{" "}
-            {c.revealed ? `Identity revealed (${c.ref})` : "Identity sealed"}
+          <p className="mt-2 text-sm text-muted-foreground">
+            Year {c.yearGroup} · {c.schoolName} · Surfaced{" "}
+            {shortDate(c.surfacedAt)}
+            {c.status === "OPEN" ? ` · Waiting ${waitingLabel(c.waitingMs)}` : ""}
           </p>
-          <p className="mt-3 text-lg font-medium">{c.headline}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {c.confidence} confidence · Observed {formatDate(c.window.start)} to{" "}
-            {formatDate(c.window.end)}
-          </p>
+          {!c.revealed ? (
+            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Lock className="size-3.5" aria-hidden />
+              Identity sealed
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {c.revealed ? null : c.revealable ? (
@@ -155,121 +160,71 @@ export default async function CaseViewPage({
               schoolId={c.schoolId}
               reasons={c.revealReasons}
             />
-          ) : (
-            <SealedNotice />
-          )}
+          ) : null}
           <CaseMenu />
         </div>
       </div>
 
-      {/* Safeguarding context — non-identifying, shown even while sealed */}
-      <ContextFlags context={c.context} />
+      {/* Compact metadata row */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
+        <span>
+          <span className="font-semibold text-ink tabular-nums">
+            {c.signalsLinked}
+          </span>{" "}
+          linked signals
+        </span>
+        <span>
+          <span className="font-semibold text-ink tabular-nums">
+            {c.sources.length}
+          </span>{" "}
+          source {c.sources.length === 1 ? "system" : "systems"}
+        </span>
+        {c.timeToSurface ? (
+          <span>
+            <span className="font-semibold text-ink tabular-nums">
+              {c.timeToSurface.days}
+            </span>{" "}
+            days to surface
+          </span>
+        ) : null}
+      </div>
 
-      {/* Case lifecycle — composed from real state */}
-      <LifecycleStepper stages={c.lifecycle} />
+      {/* Compact status strip */}
+      <div className="mt-4">
+        <StatusStrip steps={steps} />
+      </div>
 
-      {/* Time to surface */}
-      {c.timeToSurface !== null ? (
-        <Card className="mt-5 flex items-center gap-3 border-cobalt/30 bg-cobalt-tint p-4">
-          <Clock className="size-5 shrink-0 text-cobalt" aria-hidden />
-          <p className="text-sm">
-            Watch linked{" "}
-            <span className="font-semibold">{c.signalsLinked} signals</span>{" "}
-            across {c.sources.length}{" "}
-            {c.sources.length === 1 ? "system" : "systems"} into one pattern, and
-            surfaced it{" "}
-            <span className="font-semibold">{c.timeToSurface.days} days</span>{" "}
-            before a {c.timeToSurface.cadenceLabel} would have connected them.
-          </p>
-        </Card>
-      ) : null}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+        {/* Main narrative column */}
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* 2. Watch analysis hero */}
+          <WatchAnalysis
+            pattern={pattern}
+            summary={c.overall}
+            recommendedNextStep={c.escalation.route[0] ?? "DSL review"}
+            signalsLinked={c.signalsLinked}
+            systems={c.sources.length}
+            timeToSurface={c.timeToSurface}
+          />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
-        {/* Main column */}
-        <div className="flex flex-col gap-6">
-          <section>
-            <h2 className="text-xl font-semibold">What Watch sees</h2>
+          {/* 3. Evidence timeline */}
+          <section id="evidence">
+            <h2 className="text-lg font-[650]">Evidence Watch connected</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Each indicator, with the source it came from. Every entry traces to
-              an underlying record.
+              Every indicator traces back to its original school record.
             </p>
-            <ol className="mt-4">
-              {c.timeline.map((entry, i) => (
-                <li key={i} className="flex gap-3">
-                  <div className="w-16 shrink-0 pt-px text-xs tabular-nums text-muted-foreground">
-                    {formatDay(entry.date)}
-                  </div>
-                  {/* Rail: a cobalt node per entry, joined by a hairline. */}
-                  <div className="flex flex-col items-center">
-                    <span
-                      className="mt-1 size-2.5 shrink-0 rounded-full border-2 border-cobalt bg-card"
-                      aria-hidden
-                    />
-                    {i < c.timeline.length - 1 ? (
-                      <span className="w-px flex-1 bg-cloud" aria-hidden />
-                    ) : null}
-                  </div>
-                  <div className="min-w-0 flex-1 pb-5">
-                    <div className="text-xs font-medium uppercase tracking-wide text-cobalt">
-                      {entry.source}
-                    </div>
-                    <div className="mt-0.5 text-sm">{entry.label}</div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <RiskFactorBreakdown factors={c.riskFactors} />
-
-          <section>
-            <h2 className="text-xl font-semibold">Risk interpretation</h2>
-            <Card className="mt-3 p-5">
-              <div className="flex gap-4">
-                <span
-                  className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-cobalt-tint text-cobalt sm:flex"
-                  aria-hidden
-                >
-                  <Network className="size-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium uppercase tracking-wide text-cobalt">
-                    {c.interpretation.source} · {c.interpretation.rule}
-                  </div>
-                  <p className="mt-2 text-sm leading-relaxed">
-                    {c.interpretation.summary}
-                  </p>
-                </div>
-              </div>
-              <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {Object.entries(c.interpretation.metrics).map(([k, v]) => (
-                  <div key={k}>
-                    <dt className="text-xs text-muted-foreground">
-                      {metricLabel(k)}
-                    </dt>
-                    <dd className="text-sm font-semibold tabular-nums">
-                      {String(v)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </Card>
-          </section>
-
-          <section>
-            <div className="flex items-center gap-2">
-              <Brain className="size-5 text-cobalt" aria-hidden />
-              <h2 className="text-xl font-semibold">Watch&apos;s overall assessment</h2>
+            <div className="mt-3">
+              <EvidenceTimeline entries={c.timeline} />
             </div>
-            <Card className="mt-3 p-5">
-              <p className="text-sm leading-relaxed">{c.overall}</p>
-            </Card>
           </section>
 
+          <ContributingEvidence factors={c.riskFactors} />
+
+          {/* Prepare a document (advisory drafting) */}
           <section>
-            <h2 className="text-xl font-semibold">Take action</h2>
+            <h2 className="text-lg font-[650]">Prepare a document</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Draft a document for this case. Watch prepares it; you edit, then
+              Watch drafts a document for professional review; you edit, then
               file or download. Watch never sends anything itself.
             </p>
             <div className="mt-3">
@@ -281,12 +236,12 @@ export default async function CaseViewPage({
             </div>
           </section>
 
+          {/* Linked documents — compact table */}
           <section>
-            <h2 className="text-xl font-semibold">Linked documents</h2>
+            <h2 className="text-lg font-[650]">Linked documents</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Every document is linked to this pupil — to this concern or another
-              of theirs. Filed letters, records and referrals live here, sealed
-              by construction. Trust policies sit in the{" "}
+              Filed letters, records and referrals for this pupil, sealed by
+              construction. Trust policies sit in the{" "}
               <Link
                 href={`/dashboard/school/${schoolId}/documents`}
                 className="text-cobalt hover:underline"
@@ -297,220 +252,154 @@ export default async function CaseViewPage({
             </p>
             {c.documents.length === 0 ? (
               <Card className="mt-3 p-4 text-sm text-muted-foreground">
-                No documents filed against this pupil yet. Draft one from Take
-                action above; it files here, linked to the case.
+                No documents filed for this pupil yet. Prepare one above; it files
+                here, linked to the case.
               </Card>
             ) : (
-              <ul className="mt-3 flex flex-col gap-2">
-                {c.documents.map((d) => (
-                  <li key={d.id}>
-                    <Link
-                      href={`/dashboard/school/${schoolId}/documents/${d.id}`}
-                      className="group flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cloud bg-card p-4 transition-colors hover:border-cobalt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold">{d.title}</span>
-                          <span className="rounded-full bg-paper px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                            {d.linkedTo === "case" ? "This case" : "Pupil record"}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          {d.type} ·{" "}
-                          {d.docDate.toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                          })}{" "}
-                          · {d.status}
-                        </div>
-                      </div>
-                      <ChevronRight
-                        className="size-5 shrink-0 text-muted-foreground transition-colors group-hover:text-cobalt"
-                        aria-hidden
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-3">
+                <LinkedDocumentsTable
+                  documents={c.documents}
+                  schoolId={schoolId}
+                />
+              </div>
             )}
           </section>
 
-          <section>
-            <h2 className="text-xl font-semibold">Case notes</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Notes are part of the safeguarding record. Tag a colleague to
-              notify them.
-            </p>
+          {/* Case notes — existing notes, then composer */}
+          <section id="notes">
+            <h2 className="text-lg font-[650]">Case notes</h2>
+            {c.notes.length > 0 ? (
+              <ul className="mt-3 flex flex-col gap-3">
+                {c.notes.map((note) => (
+                  <li key={note.id}>
+                    <Card className="p-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          aria-hidden
+                          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-paper text-[11px] font-semibold text-ink-muted"
+                        >
+                          {note.author
+                            .split(/\s+/)
+                            .map((p) => p[0])
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .join("")
+                            .toUpperCase()}
+                        </span>
+                        <span className="text-sm font-medium">
+                          {note.author}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {note.createdAt.toLocaleString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {note.tagged.length > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            · notified {note.tagged.join(", ")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed">{note.body}</p>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <div className="mt-3">
               <NoteForm
                 signalId={c.signalId}
                 schoolId={c.schoolId}
                 colleagues={colleagues}
               />
+              <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Lock className="size-3.5" aria-hidden />
+                Visible to authorised safeguarding staff
+              </p>
             </div>
-            {c.notes.length > 0 ? (
-              <ul className="mt-4 flex flex-col gap-3">
-                {c.notes.map((note) => (
-                  <li key={note.id}>
-                    <Card className="p-4">
-                      <p className="text-sm leading-relaxed">{note.body}</p>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        {note.author} ·{" "}
-                        {note.createdAt.toLocaleString("en-GB", {
+          </section>
+        </div>
+
+        {/* Right column — sticky decision workspace, then secondary/tertiary */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <div id="decision" className="lg:sticky lg:top-6">
+            <DecisionPanel
+              signalId={c.signalId}
+              schoolId={c.schoolId}
+              level={c.escalation.level}
+              waitingMs={c.waitingMs}
+              status={c.status}
+              canRefer={c.referral.canRefer}
+              referral={c.referral}
+              caseFile={c.caseFile}
+              reviews={c.reviews}
+              colleagues={colleagues}
+            />
+          </div>
+
+          {c.revealed ? <SnapshotPanel snapshot={c.snapshot} /> : null}
+
+          <PupilContext context={c.context} />
+
+          {/* Linked concerns — compact */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Linked concerns</h3>
+              {c.linked.length === 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  No other open patterns
+                </span>
+              ) : null}
+            </div>
+            {c.linked.length > 0 ? (
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {c.linked.map((l) => (
+                  <li key={l.id}>
+                    <Link
+                      href={`/dashboard/school/${schoolId}/case/${l.id}`}
+                      className="group flex items-center justify-between gap-2 text-sm text-cobalt hover:underline"
+                    >
+                      {l.headline}
+                      <ChevronRight className="size-4 shrink-0" aria-hidden />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </Card>
+
+          {/* Audit trail — humanised, with the acting professional */}
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold">Audit trail</h3>
+            {c.audit.length === 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No entries yet for this case.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {c.audit.map((e) => (
+                  <li key={e.id} className="flex gap-2.5 text-sm">
+                    <span
+                      aria-hidden
+                      className="mt-1 size-1.5 shrink-0 rounded-full bg-cobalt/60"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs tabular-nums text-muted-foreground">
+                        {e.createdAt.toLocaleString("en-GB", {
                           day: "numeric",
                           month: "short",
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
-                        {note.tagged.length > 0
-                          ? ` · tagged ${note.tagged.join(", ")}`
-                          : ""}
                       </div>
-                    </Card>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
-        </div>
-
-        {/* Context column */}
-        <div className="flex flex-col gap-6">
-          <SnapshotPanel snapshot={c.snapshot} />
-
-          <Card className="p-5">
-            <h3 className="text-base font-semibold">Decision</h3>
-            {c.status === "OPEN" ? (
-              <div className="mt-3">
-                <p className="mb-3 text-sm text-muted-foreground">
-                  The decision is yours. Watch never closes a case.
-                </p>
-                <DismissForm signalId={c.signalId} schoolId={c.schoolId} />
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">
-                This case has been {c.status.toLowerCase()} and recorded to the
-                audit trail.
-              </p>
-            )}
-          </Card>
-
-          {c.referral.canRefer ? (
-            <Card className="p-5">
-              <div className="flex items-center gap-2">
-                <Send className="size-4 text-muted-foreground" aria-hidden />
-                <h3 className="text-base font-semibold">Referral</h3>
-              </div>
-              <div className="mt-3">
-                <CaseReferral
-                  signalId={c.signalId}
-                  schoolId={c.schoolId}
-                  referral={c.referral}
-                />
-              </div>
-            </Card>
-          ) : null}
-
-          <Card className="p-5">
-            <div className="flex items-center gap-2">
-              <FolderOpen className="size-4 text-muted-foreground" aria-hidden />
-              <h3 className="text-base font-semibold">Case file</h3>
-            </div>
-            <div className="mt-3">
-              <CaseFilePanel
-                signalId={c.signalId}
-                schoolId={c.schoolId}
-                caseFile={c.caseFile}
-              />
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="size-4 text-muted-foreground" aria-hidden />
-              <h3 className="text-base font-semibold">Pastoral review</h3>
-            </div>
-            <div className="mt-3">
-              <ReviewScheduler
-                signalId={c.signalId}
-                schoolId={c.schoolId}
-                colleagues={colleagues}
-                reviews={c.reviews}
-              />
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <h3 className="text-base font-semibold">Escalation</h3>
-            <div className="mt-3">
-              <LevelChip level={c.escalation.level} />
-            </div>
-            <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Recommended route
-            </p>
-            <ul className="mt-1.5 flex flex-col gap-1.5">
-              {c.escalation.route.map((step) => (
-                <li key={step} className="text-sm">
-                  {step}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Why this level
-            </p>
-            <p className="mt-1.5 text-sm leading-relaxed">
-              {c.escalation.rationale}
-            </p>
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-center gap-2">
-              <Link2 className="size-4 text-muted-foreground" aria-hidden />
-              <h3 className="text-base font-semibold">Linked context</h3>
-            </div>
-            {c.linked.length === 0 ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                No other open patterns for this pupil.
-              </p>
-            ) : (
-              <ul className="mt-2 flex flex-col gap-2">
-                {c.linked.map((l) => (
-                  <li key={l.id}>
-                    <Link
-                      href={`/dashboard/school/${schoolId}/case/${l.id}`}
-                      className="text-sm text-cobalt hover:underline"
-                    >
-                      {l.headline}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-center gap-2">
-              <ScrollText className="size-4 text-muted-foreground" aria-hidden />
-              <h3 className="text-base font-semibold">Case audit trail</h3>
-            </div>
-            {c.audit.length === 0 ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                No entries yet for this case.
-              </p>
-            ) : (
-              <ul className="mt-2 flex flex-col gap-2">
-                {c.audit.map((e) => (
-                  <li key={e.id} className="text-sm">
-                    <span className="text-muted-foreground tabular-nums">
-                      {e.createdAt.toLocaleString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>{" "}
-                    · {e.action}
+                      <div>
+                        {auditLabel(e.action)}
+                        <span className="text-muted-foreground"> · {e.by}</span>
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
