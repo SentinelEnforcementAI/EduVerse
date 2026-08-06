@@ -1,13 +1,13 @@
 import { LEVEL_META, type EscalationLevel } from "@/server/escalation";
 import { cn } from "@/lib/utils";
 
-// Escalation-level chip (spec section 7). The risk palette is reserved for risk
-// meaning about a child, and a proportionate escalation level is exactly that,
-// so it may use it: level 4 red, 3 and 2 amber, 1 green. It shows the LEVEL,
-// never a numeric risk score.
+// Escalation-level chip (spec section 7). Carries the canonical escalation
+// scale: L1 monitor (slate), L2 emerging (cobalt), L3 targeted (amber), L4
+// statutory (red). The full level name always travels with the colour, so the
+// chip never relies on colour alone. It shows the LEVEL, never a risk score.
 const STYLES: Record<EscalationLevel, string> = {
-  1: "bg-success-tint text-ink",
-  2: "bg-warning-tint text-ink",
+  1: "bg-cloud text-ink",
+  2: "bg-cobalt-tint text-ink",
   3: "bg-warning-tint text-ink",
   4: "bg-risk-tint text-ink",
 };

@@ -7,8 +7,10 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        // DESIGN.md v2: white cards on paper, cloud borders — no shadows.
-        "rounded-lg border bg-card text-card-foreground",
+        // Brand refinement 08/2026: warm-white cards lifted off the paper with a
+        // softer hairline (#E6E9F0) and a very light shadow, radius 14px — so the
+        // UI reads on layered planes, not one flat sheet.
+        "rounded-[14px] border border-[var(--card-border)] bg-card text-card-foreground shadow-[var(--shadow-card)]",
         className,
       )}
       {...props}

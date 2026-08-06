@@ -210,7 +210,7 @@ export default async function InsightsPage() {
                 href={`/dashboard/trust/cohort/${p.key}`}
                 className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
+                <Card className="h-full p-5 card-interactive">
                   <span className="flex size-9 items-center justify-center rounded-lg bg-cobalt-tint text-cobalt">
                     <Network className="size-[18px]" aria-hidden />
                   </span>

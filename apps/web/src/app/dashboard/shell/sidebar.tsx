@@ -2,6 +2,7 @@ import Link from "next/link";
 import { HelpCircle, type LucideIcon } from "lucide-react";
 
 import { BrandLockup } from "@/components/brand";
+import { cn } from "@/lib/utils";
 
 import { NavLink } from "./nav-link";
 import { ProfileMenu, type Workspace } from "./profile-menu";
@@ -90,15 +91,28 @@ export function Sidebar({
             Quick actions
           </div>
           <ul className="mt-2 space-y-0.5">
-            {quickActions.map((qa) => {
+            {quickActions.map((qa, i) => {
               const Icon = qa.icon;
+              // Only the primary action (the review queue) is highlighted; the
+              // rest are quiet rows. One clear priority, not three competing.
+              const primary = i === 0;
               return (
                 <li key={qa.href}>
                   <Link
                     href={qa.href}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm text-ink transition-colors hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      primary
+                        ? "bg-cobalt font-medium text-white hover:bg-cobalt-deep"
+                        : "text-muted-foreground hover:bg-paper hover:text-ink",
+                    )}
                   >
-                    <span className="flex size-6 items-center justify-center rounded-md bg-cobalt-tint text-cobalt">
+                    <span
+                      className={cn(
+                        "flex size-6 items-center justify-center rounded-md",
+                        primary ? "bg-white/20 text-white" : "text-muted-foreground",
+                      )}
+                    >
                       <Icon className="size-3.5" aria-hidden />
                     </span>
                     {qa.label}

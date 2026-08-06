@@ -17,9 +17,9 @@
   --cloud: #e8ebf0; /* borders, dividers, muted fills */
   --cobalt: #3157ff; /* the workhorse: actions, links, focus, primary data */
   --signal-lime: #c8ff4a; /* accent only — never risk meaning, never text on light */
-  --risk-red: #ff4d4d; /* high risk only */
-  --warning-amber: #ffb020; /* medium risk only */
-  --success-green: #16a36a; /* resolved / monitor / positive trend only */
+  --risk-red: #ef4444; /* statutory / high risk only */
+  --warning-amber: #f5a617; /* targeted / medium risk only */
+  --success-green: #18a66a; /* resolved / positive / confirmed only */
 
   /* Derived tones (tints of palette colours, no new hues) */
   --ink-muted: #5b5f66; /* secondary text — ink lifted for metadata */
@@ -32,8 +32,25 @@
   /* ── shadcn variable mapping ── */
   --background: var(--paper);
   --foreground: var(--ink);
+  /* Cards are white, lifted off the paper with a soft hairline and a very light
+   * shadow so surfaces read on layered planes, not one flat sheet. Hoverable
+   * cards deepen the shadow and take a pale-cobalt border + 1px lift — never a
+   * permanent cobalt outline (brand refinement 08/2026). */
   --card: #ffffff;
   --card-foreground: var(--ink);
+  --card-border: #e4e8f0;
+  --card-border-hover: #c9d2ff;
+  --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.035);
+  --shadow-card-hover: 0 8px 24px rgba(15, 23, 42, 0.07);
+
+  /* Escalation scale — one canonical colour per level, used everywhere the
+   * caseload is coloured. Identity is never colour alone: the level name and a
+   * marker always travel with it. */
+  --level-1: #5f6670; /* Monitor — slate */
+  --level-2: #3157ff; /* Emerging need — cobalt */
+  --level-3: #f5a617; /* Targeted support — amber */
+  --level-4: #ef4444; /* Statutory threshold — red */
+  --confirmed: #18a66a; /* Positive / confirmed — green */
   --popover: #ffffff;
   --popover-foreground: var(--ink);
   --primary: var(--cobalt);
@@ -113,6 +130,30 @@
   --color-warning-tint: var(--warning-tint);
   --color-success: var(--success-green);
   --color-success-tint: var(--success-tint);
+
+  /* Escalation-level utilities: text-level-3, bg-level-4, … */
+  --color-level-1: var(--level-1);
+  --color-level-2: var(--level-2);
+  --color-level-3: var(--level-3);
+  --color-level-4: var(--level-4);
+  --color-confirmed: var(--confirmed);
+}
+
+@layer components {
+  /* The one interactive-card treatment: quiet by default, a pale-cobalt border
+   * and a slightly deeper shadow with a 1px lift on hover. Applied to any card
+   * that is itself a link/button. Never a permanent cobalt outline. */
+  .card-interactive {
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .card-interactive:hover {
+    border-color: var(--card-border-hover);
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-1px);
+  }
 }
 
 @layer base {

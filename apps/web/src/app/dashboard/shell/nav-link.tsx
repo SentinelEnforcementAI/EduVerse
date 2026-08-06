@@ -36,19 +36,16 @@ export function NavLink({
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
-          ? "bg-cobalt-tint text-cobalt"
+          ? "bg-cobalt-tint/70 text-cobalt"
           : "text-muted-foreground hover:bg-paper hover:text-ink",
       )}
     >
       {children}
       <span className="flex-1 truncate">{label}</span>
       {typeof badge === "number" && badge > 0 ? (
-        <span
-          className={cn(
-            "min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums",
-            active ? "bg-cobalt text-white" : "bg-cloud text-muted-foreground",
-          )}
-        >
+        // A small, neutral count — cobalt is reserved for interaction, not for
+        // decorating every badge.
+        <span className="min-w-[18px] rounded-full bg-cloud px-1 py-px text-center text-[11px] font-semibold leading-4 tabular-nums text-ink-muted">
           {badge}
         </span>
       ) : null}

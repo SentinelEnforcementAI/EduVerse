@@ -34,7 +34,7 @@ export default async function DashboardHome() {
           href="/dashboard/trust"
           className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full p-8 text-left transition-colors group-hover:border-cobalt">
+          <Card className="h-full p-8 text-left card-interactive">
             <div className="flex size-12 items-center justify-center rounded-lg bg-cobalt-tint">
               <Building2 className="size-6 text-cobalt" aria-hidden />
             </div>

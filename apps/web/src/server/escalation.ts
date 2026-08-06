@@ -14,6 +14,17 @@
 
 export type EscalationLevel = 1 | 2 | 3 | 4;
 
+// The one canonical colour per escalation level (see globals.css). Used wherever
+// the caseload is coloured — the bar, the donut, chips — so the scale reads the
+// same everywhere. Identity is never colour alone: the level name and a marker
+// always travel with it.
+export const LEVEL_COLOR: Record<EscalationLevel, string> = {
+  1: "var(--level-1)",
+  2: "var(--level-2)",
+  3: "var(--level-3)",
+  4: "var(--level-4)",
+};
+
 export function escalationLevel(
   severity: number,
   serious = false,

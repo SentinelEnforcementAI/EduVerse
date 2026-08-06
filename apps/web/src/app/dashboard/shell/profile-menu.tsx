@@ -71,7 +71,7 @@ export function ProfileMenu({
       >
         <span
           aria-hidden
-          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-cobalt-tint text-sm font-semibold text-cobalt"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-paper text-xs font-semibold text-ink-muted"
         >
           {initials}
         </span>

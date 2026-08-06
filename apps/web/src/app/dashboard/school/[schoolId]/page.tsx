@@ -67,7 +67,9 @@ export default async function SchoolOverviewPage({
           <h1 className="text-2xl font-semibold tracking-tight">
             Safeguarding overview
           </h1>
-          <p className="mt-1 text-base italic text-cobalt">{data.school.name}</p>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">
+            {data.school.name}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -97,10 +99,10 @@ export default async function SchoolOverviewPage({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Pupils on roll"
-          value={data.metrics.pupilsOnRoll}
+          value={data.metrics.pupilsOnRoll.toLocaleString("en-GB")}
           icon={Users}
           footer="On roll this term"
         />
@@ -111,15 +113,14 @@ export default async function SchoolOverviewPage({
           icon={Flag}
           tone="risk"
           footer={`${data.metrics.byLevel[3] + data.metrics.byLevel[4]} at action threshold`}
-          trend={data.metrics.trend}
         />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
           href={`/dashboard/school/${data.school.id}/triage/awaiting`}
           icon={Timer}
-          tone="warning"
-          footer="Needs a DSL decision"
+          hero
+          cta="Review queue"
         />
         <KpiCard
           label="Reviewed this term"
@@ -129,12 +130,10 @@ export default async function SchoolOverviewPage({
         />
       </div>
 
-      <Card className="mt-4 p-5">
+      <Card className="mt-3 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">
-              Caseload by escalation level
-            </h2>
+            <h2 className="text-base font-semibold">Safeguarding caseload</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {data.metrics.activeConcerns} active concerns
             </p>
@@ -169,7 +168,7 @@ export default async function SchoolOverviewPage({
               href={`/dashboard/school/${data.school.id}/case/${pattern.id}`}
               className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
+              <Card className="h-full p-5 card-interactive">
                 <div className="flex items-start justify-between gap-3">
                   <div className="text-lg font-semibold">
                     {pattern.ref}{" "}

@@ -34,7 +34,7 @@ export function StatTile({
         href={href}
         className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Card className="h-full p-4 transition-colors group-hover:border-cobalt">
+        <Card className="h-full p-4 card-interactive">
           {inner}
         </Card>
       </Link>
@@ -159,10 +159,10 @@ export function BarList({
 }
 
 const LEVEL_STYLE: Record<number, { bg: string; label: string }> = {
-  1: { bg: "var(--muted-foreground)", label: "L1 Monitor" },
-  2: { bg: "var(--cobalt)", label: "L2 Emerging" },
-  3: { bg: "var(--warning-amber)", label: "L3 Targeted" },
-  4: { bg: "var(--risk-red)", label: "L4 Statutory" },
+  1: { bg: "var(--level-1)", label: "L1 Monitor" },
+  2: { bg: "var(--level-2)", label: "L2 Emerging need" },
+  3: { bg: "var(--level-3)", label: "L3 Targeted support" },
+  4: { bg: "var(--level-4)", label: "L4 Statutory threshold" },
 };
 
 // The escalation-level mix of the active caseload: a donut on the ordinal level

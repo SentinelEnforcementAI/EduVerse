@@ -47,7 +47,7 @@ export default async function DashboardLayout({
   const isDirector = tenancy.mode === "mat";
   const isAdmin = session.user.role === "ADMIN";
   const roleLabel = isAdmin
-    ? "Trust administrator"
+    ? "Trust Safeguarding Lead"
     : isDirector
       ? "Director of Safeguarding"
       : `DSL${tenancy.schools[0] ? `, ${tenancy.schools[0].name}` : ""}`;
@@ -96,10 +96,11 @@ export default async function DashboardLayout({
           icon: FileText,
         },
         {
+          // The actionable count lives on the top-bar bell only, to avoid the
+          // same number shouting from two places.
           href: "/dashboard/alerts",
           label: "Alerts",
           icon: Bell,
-          badge: counts.alerts,
         },
         { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },
       ]
@@ -129,10 +130,11 @@ export default async function DashboardLayout({
           badge: intakeCount,
         },
         {
+          // The actionable count lives on the top-bar bell only, to avoid the
+          // same number shouting from two places.
           href: "/dashboard/alerts",
           label: "Alerts",
           icon: Bell,
-          badge: counts.alerts,
         },
         { href: `${schoolBase}/kcsie`, label: "KCSIE", icon: FileText },
         { href: "/dashboard/audit", label: "Audit log", icon: ScrollText },

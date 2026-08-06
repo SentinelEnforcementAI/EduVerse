@@ -36,10 +36,10 @@ export function Topbar({
           </Link>
           {showSwitch ? (
             <Link
-              href="/dashboard"
+              href="/dashboard/trust"
               className="rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-paper hover:text-ink"
             >
-              Switch view
+              Trust view
             </Link>
           ) : null}
         </nav>

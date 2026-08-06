@@ -1,42 +1,46 @@
 import Link from "next/link";
-import { ChevronRight, type LucideIcon } from "lucide-react";
+import { ArrowRight, ChevronRight, type LucideIcon } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-import { Sparkline } from "./sparkline";
-
-// A KPI figure (spec 5.1 / 5.2). An icon tile anchors the card, the value leads,
-// and an optional footer carries a status line and an honest trend sparkline
-// (real series only, never invented). The icon tile uses cobalt (the workhorse
-// for non-risk chrome); risk tone on the tile/sparkline is reserved for a
-// genuinely risk-carrying figure. When an href is given the whole card is a
-// link into the matching list.
+// A KPI figure (spec 5.1 / 5.2). Every card shares one structure — icon tile,
+// label, value, a short status line, and an action affordance — so the row
+// reads as one designed system. Colour is earned, not decorative: an icon tile
+// is monochrome by default; a risk-carrying figure takes the risk palette; and
+// the single priority metric ("hero") takes a subtle cobalt wash with a CTA.
+// Cobalt otherwise appears only on interaction (the chevron / CTA into a list).
 export function KpiCard({
   label,
   value,
   href,
   icon: Icon,
-  tone = "cobalt",
+  tone = "neutral",
   footer,
-  trend,
+  hero = false,
+  cta,
 }: {
   label: string;
   value: number | string;
   href?: string;
   icon?: LucideIcon;
-  tone?: "cobalt" | "risk" | "warning" | "success";
+  tone?: "neutral" | "risk" | "warning" | "success";
   footer?: React.ReactNode;
-  trend?: number[];
+  // The single most actionable card on the page — subtle cobalt background and
+  // a call-to-action instead of a passive chevron.
+  hero?: boolean;
+  cta?: string;
 }) {
-  const tileClass =
-    tone === "risk"
+  const tileClass = hero
+    ? "bg-cobalt-tint text-cobalt"
+    : tone === "risk"
       ? "bg-risk-tint text-risk"
       : tone === "warning"
         ? "bg-warning-tint text-warning"
         : tone === "success"
           ? "bg-success-tint text-success"
-          : "bg-cobalt-tint text-cobalt";
+          : // Neutral: monochrome tile, no decorative cobalt.
+            "bg-paper text-ink-muted";
 
   const body = (
     <>
@@ -59,7 +63,7 @@ export function KpiCard({
             {value}
           </div>
         </div>
-        {href ? (
+        {href && !hero ? (
           <ChevronRight
             className="size-5 shrink-0 text-muted-foreground transition-colors group-hover:text-cobalt"
             aria-hidden
@@ -67,11 +71,16 @@ export function KpiCard({
         ) : null}
       </div>
 
-      {footer || trend ? (
-        <div className="mt-4 flex items-end justify-between gap-3">
-          <div className="min-w-0 text-xs text-muted-foreground">{footer}</div>
-          {trend ? <Sparkline data={trend} tone={tone} /> : null}
+      {hero && cta ? (
+        <div className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-cobalt">
+          {cta}
+          <ArrowRight
+            className="size-4 transition-transform group-hover:translate-x-0.5"
+            aria-hidden
+          />
         </div>
+      ) : footer ? (
+        <div className="mt-4 text-xs text-muted-foreground">{footer}</div>
       ) : null}
     </>
   );
@@ -80,9 +89,14 @@ export function KpiCard({
     return (
       <Link
         href={href}
-        className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
+        <Card
+          className={cn(
+            "h-full p-5 card-interactive",
+            hero ? "border-cobalt/25 bg-cobalt-tint/50" : "",
+          )}
+        >
           {body}
         </Card>
       </Link>
@@ -90,20 +104,4 @@ export function KpiCard({
   }
 
   return <Card className="h-full p-5">{body}</Card>;
-}
-
-// A compact labelled figure used inside the trust school grid.
-export function MiniStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
-    </div>
-  );
 }

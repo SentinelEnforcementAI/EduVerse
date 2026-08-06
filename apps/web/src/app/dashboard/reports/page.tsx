@@ -55,8 +55,8 @@ export default async function ReportsPage() {
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
       <p className="mt-1 text-base text-muted-foreground">
-        Governance reports, built from the live figures. Nothing here is a
-        hardcoded number.
+        Generate board-ready safeguarding reports from the trust&apos;s live
+        data.
       </p>
 
       <Card className="mt-6 max-w-2xl p-6">

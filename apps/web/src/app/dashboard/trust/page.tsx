@@ -17,9 +17,9 @@ import { buildTrustTermlyReport } from "@/server/reports/termly";
 import { serverApi } from "@/trpc/server";
 
 import { CaseloadBar } from "../shell/caseload-bar";
-import { KpiCard, MiniStat } from "../shell/kpi";
+import { KpiCard } from "../shell/kpi";
 import { ReportPanel } from "../shell/report-panel";
-import { RiskPill } from "../shell/risk-pill";
+import { SchoolCard } from "../shell/school-card";
 import { Sparkline } from "../shell/sparkline";
 
 // Trust overview (spec 5.1): the trust safeguarding picture and where to look
@@ -57,9 +57,18 @@ export default async function TrustOverviewPage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Trust safeguarding overview
           </h1>
-          <p className="mt-1 text-base italic text-cobalt">
-            {data.trustName} · {data.metrics.schools} schools
-          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+            <span className="font-medium text-ink">{data.trustName}</span>
+            <span
+              className="rounded-md border border-[var(--card-border)] bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground"
+            >
+              {data.metrics.schools} schools
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--card-border)] bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-success" aria-hidden />
+              All connected
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -83,17 +92,12 @@ export default async function TrustOverviewPage() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Schools in trust"
           value={data.metrics.schools}
           icon={Building2}
-          footer={
-            <span className="inline-flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-success" aria-hidden />
-              All schools active
-            </span>
-          }
+          footer="All schools active"
         />
         <KpiCard
           label="Pupils on roll"
@@ -108,26 +112,24 @@ export default async function TrustOverviewPage() {
           icon={Flag}
           tone="risk"
           footer={`${data.metrics.byLevel[3] + data.metrics.byLevel[4]} at action threshold`}
-          trend={data.metrics.trend}
         />
         <KpiCard
           label="Awaiting a decision"
           value={data.metrics.awaitingDecision}
           href="/dashboard/trust/triage/awaiting"
           icon={Timer}
-          tone="warning"
-          footer="Needs a DSL decision"
+          hero
+          cta="Review queue"
         />
       </div>
 
-      <Card className="mt-4 p-5">
+      <Card className="mt-3 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">
-              Caseload by escalation level
-            </h2>
+            <h2 className="text-base font-semibold">Safeguarding caseload</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {data.metrics.activeConcerns} active concerns across the trust
+              {data.metrics.activeConcerns} active concerns across{" "}
+              {data.metrics.schools} schools
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -149,43 +151,9 @@ export default async function TrustOverviewPage() {
           View all schools <ArrowRight className="size-4" aria-hidden />
         </Link>
       </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {data.schools.map((school) => (
-          <Link
-            key={school.id}
-            href={`/dashboard/school/${school.id}`}
-            className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-lg font-semibold">{school.name}</span>
-                <div className="flex items-center gap-2">
-                  <RiskPill band={school.riskBand} />
-                  <ChevronRight
-                    className="size-5 text-muted-foreground transition-colors group-hover:text-cobalt"
-                    aria-hidden
-                  />
-                </div>
-              </div>
-              {school.dsl ? (
-                <div className="mt-0.5 text-sm text-muted-foreground">
-                  DSL: {school.dsl}
-                </div>
-              ) : null}
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                <MiniStat label="Pupils" value={school.pupilsOnRoll} />
-                <MiniStat label="Concerns" value={school.activeConcerns} />
-                <MiniStat label="To decide" value={school.awaitingDecision} />
-              </div>
-              <CaseloadBar byLevel={school.byLevel} className="mt-4" compact />
-              <div className="mt-4 flex items-center justify-between border-t border-cloud pt-3">
-                <span className="text-xs text-muted-foreground">
-                  Behaviour, 12-month trend
-                </span>
-                <Sparkline data={school.trend} />
-              </div>
-            </Card>
-          </Link>
+          <SchoolCard key={school.id} school={school} />
         ))}
       </div>
 
@@ -213,8 +181,8 @@ export default async function TrustOverviewPage() {
                 href={`/dashboard/trust/cohort/${p.key}`}
                 className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Card className="h-full p-5 transition-colors group-hover:border-cobalt">
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-cobalt-tint text-cobalt">
+                <Card className="h-full p-5 card-interactive">
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-paper text-ink-muted">
                     <Network className="size-[18px]" aria-hidden />
                   </span>
                   <div className="mt-3 text-base font-semibold leading-snug">
