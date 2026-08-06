@@ -21,6 +21,7 @@ export default async function AlertsPage() {
     level: a.level,
     domain: a.domain,
     signalCount: a.signalCount,
+    surfacedAt: a.surfacedAt,
     waitingMs: a.waitingMs,
   }));
 

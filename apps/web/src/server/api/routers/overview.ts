@@ -251,6 +251,10 @@ export const overviewRouter = createTRPCRouter({
               domain: domainOfRule(sig.ruleVersion.key).label,
               signalCount: contributing.get(sig.pupilId) ?? 1,
               windowEnd: sig.windowEnd,
+              // The moment the concern reached the action threshold, as an ISO
+              // string, so the queue can show an absolute "Since …" alongside
+              // the relative wait. Resolved here, not in a component.
+              surfacedAt: sig.windowEnd.toISOString(),
               // Time the concern has been waiting for a decision, computed here
               // (a resolver, not a component) so the value is stable per request.
               waitingMs: Math.max(0, Date.now() - sig.windowEnd.getTime()),

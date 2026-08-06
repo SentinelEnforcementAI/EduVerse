@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, School, Search, ShieldQuestion, Zap } from "lucide-react";
 
 import { LEVEL_COLOR, type EscalationLevel } from "@/server/escalation";
 
@@ -18,6 +18,7 @@ export type AlertRow = {
   level: EscalationLevel;
   domain: string;
   signalCount: number;
+  surfacedAt: string;
   waitingMs: number;
 };
 
@@ -27,6 +28,17 @@ function waitingLabel(ms: number): string {
   const hours = Math.round(mins / 60);
   if (hours < 48) return `${hours}h`;
   return `${Math.round(hours / 24)}d`;
+}
+
+// An absolute "Since 16 May, 09:12" for the moment the concern reached the
+// action threshold — the honest anchor beneath the relative wait.
+function sinceLabel(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 const selectClass =
@@ -107,6 +119,13 @@ export function AlertsQueue({ alerts }: { alerts: AlertRow[] }) {
           <span className="font-semibold tabular-nums">{targeted}</span>
           <span className="text-muted-foreground">targeted support</span>
         </span>
+        <Link
+          href="/dashboard/governance"
+          className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-cobalt hover:underline"
+        >
+          <ShieldQuestion className="size-4" aria-hidden />
+          Alerts policy &amp; guidance
+        </Link>
       </div>
 
       {/* Filters + search */}
@@ -204,25 +223,44 @@ export function AlertsQueue({ alerts }: { alerts: AlertRow[] }) {
                     className="hidden w-44 justify-center sm:inline-flex"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold">
-                      {a.ref}{" "}
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      {a.ref}
                       <span className="font-normal text-muted-foreground">
-                        · Year {a.yearGroup} · {a.schoolName}
+                        · Year {a.yearGroup}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        <School className="size-3" aria-hidden />
+                        {a.schoolName}
                       </span>
                     </div>
                     <div className="mt-0.5 truncate text-sm text-muted-foreground">
                       {a.headline}
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {a.signalCount} contributing{" "}
-                      {a.signalCount === 1 ? "signal" : "signals"} · {a.domain} ·
-                      Waiting {waitingLabel(a.waitingMs)}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 font-medium text-ink">
+                        <Zap
+                          className="size-3.5 text-cobalt"
+                          aria-hidden
+                          fill="currentColor"
+                        />
+                        {a.signalCount} contributing{" "}
+                        {a.signalCount === 1 ? "signal" : "signals"}
+                      </span>
+                      <span>{a.domain}</span>
                     </div>
                   </div>
-                  <span className="hidden shrink-0 items-center gap-1 text-sm font-medium text-cobalt sm:inline-flex">
-                    Review concern
-                    <ChevronRight className="size-4" aria-hidden />
-                  </span>
+                  <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
+                    <span className="text-xs font-medium text-ink">
+                      Waiting {waitingLabel(a.waitingMs)}
+                    </span>
+                    <span className="text-[11px] tabular-nums text-muted-foreground">
+                      Since {sinceLabel(a.surfacedAt)}
+                    </span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 rounded-lg border border-cobalt/30 px-2.5 py-1 text-xs font-medium text-cobalt">
+                      Review
+                      <ChevronRight className="size-3.5" aria-hidden />
+                    </span>
+                  </div>
                   <ChevronRight
                     className="size-5 shrink-0 text-muted-foreground sm:hidden"
                     aria-hidden

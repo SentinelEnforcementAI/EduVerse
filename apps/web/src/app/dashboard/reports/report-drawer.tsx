@@ -185,7 +185,16 @@ export function ReportDrawer({ report }: { report: ReportData }) {
                               {n(s.activeConcerns)}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">
-                              {n(s.awaitingDecision)}
+                              <span className="inline-flex items-center justify-end gap-1.5">
+                                {s.awaitingDecision > 0 ? (
+                                  <span
+                                    aria-hidden
+                                    className="size-1.5 rounded-full bg-warning"
+                                    title="Awaiting a DSL decision"
+                                  />
+                                ) : null}
+                                {n(s.awaitingDecision)}
+                              </span>
                             </td>
                           </tr>
                         ))}
