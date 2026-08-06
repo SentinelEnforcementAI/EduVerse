@@ -84,6 +84,53 @@ async function clean(tenantId: string) {
   return deleted;
 }
 
+// One-off demo tidy-ups (mode "fixups"), idempotent and non-destructive:
+//   1. Rename the demo leadership account to a credible persona (Sarah Lewis).
+//   2. Detach the Wonde sandbox tenant from the demo trust, so it stops
+//      appearing on product screens. The tenant, roll and Wonde link are KEPT —
+//      only the trust link is cleared, which is fully reversible.
+const DEMO_ADMIN_EMAIL = "tom.abbey32@gmail.com";
+const NEW_NAME = "Sarah Lewis";
+
+async function renameLeadershipAccount() {
+  const byEmail = await systemDb.user.updateMany({
+    where: { email: DEMO_ADMIN_EMAIL },
+    data: { name: NEW_NAME },
+  });
+  const byName = await systemDb.user.updateMany({
+    where: { name: "Founder" },
+    data: { name: NEW_NAME },
+  });
+  console.info(
+    `Renamed leadership account → ${NEW_NAME} (by email: ${byEmail.count}, by placeholder name: ${byName.count}).`,
+  );
+}
+
+async function detachSandbox(slug: string) {
+  const sandboxes = await systemDb.tenant.findMany({
+    where: { OR: [{ slug }, { name: { contains: "Sandbox" } }] },
+    select: { id: true, name: true, slug: true, trustId: true },
+  });
+  if (sandboxes.length === 0) {
+    console.info("No Wonde sandbox tenant found — nothing to detach.");
+    return;
+  }
+  for (const s of sandboxes) {
+    console.info(
+      `Sandbox tenant: ${s.name} (${s.slug}) — trustId was ${s.trustId ?? "null"}.`,
+    );
+    if (s.trustId !== null) {
+      await systemDb.tenant.update({
+        where: { id: s.id },
+        data: { trustId: null },
+      });
+      console.info("  → detached from trust (data and Wonde link kept).");
+    } else {
+      console.info("  → already detached, left as-is.");
+    }
+  }
+}
+
 async function main() {
   const args = new Map<string, string>();
   const argv = process.argv.slice(2);
@@ -102,6 +149,16 @@ async function main() {
   }
   const mode = args.get("mode") ?? "report";
   const slug = args.get("slug") ?? "wonde-sandbox";
+
+  // Demo tidy-ups run before (and independently of) the tenant footprint report,
+  // so the rename still happens even if the sandbox tenant is absent.
+  if (mode === "fixups") {
+    await renameLeadershipAccount();
+    await detachSandbox(slug);
+    await systemDb.$disconnect();
+    console.info("\nDemo fix-ups complete.");
+    return;
+  }
 
   const tenant = await resolveTenant(slug);
   console.info(`Sandbox tenant: ${tenant.name} (${tenant.slug}) id=${tenant.id}`);
