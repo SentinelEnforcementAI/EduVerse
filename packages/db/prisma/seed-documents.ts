@@ -24,16 +24,52 @@ const DOCS: SeedDoc[] = [
     type: "Policy",
     status: "Current",
     date: "2025-09-06",
-    themes: ["policy", "child protection", "online safety", "reporting", "dsl"],
+    themes: [
+      "safeguarding",
+      "child protection",
+      "designated safeguarding lead",
+      "reporting concerns",
+      "online safety",
+      "peer-on-peer abuse",
+      "referral thresholds",
+    ],
     summary:
-      "Annual child protection policy aligned to KCSIE 2026. Sets out reporting routes, the role of the DSL, safer recruitment, online safety and managing allegations.",
-    content: `CHILD PROTECTION AND SAFEGUARDING POLICY
+      "This policy sets out the safeguarding responsibilities of all staff across Weald Multi-Academy Trust. It outlines how concerns are reported, the role of the Designated Safeguarding Lead, expectations relating to online safety and peer-on-peer abuse, and the thresholds for internal intervention and referral to external agencies.",
+    content: `PURPOSE
 
-This policy is reviewed annually and is aligned to Keeping Children Safe in Education 2026. It sets out how the school keeps children safe, the role of the Designated Safeguarding Lead, and the routes by which any member of staff reports a concern.
+Weald Multi-Academy Trust is committed to creating a culture where safeguarding is everyone's responsibility. Every member of staff, volunteer, governor and contractor has a duty to promote the welfare of pupils, recognise concerns promptly and take appropriate action. The welfare of the pupil is the Trust's paramount consideration.
 
-Any adult who is worried about a child records the concern on the school safeguarding system on the same day and informs the DSL. The DSL decides on the proportionate response, from monitoring through Early Help to a statutory referral to children's social care. Where a child is at risk of significant harm, a referral is made without delay.
+REPORTING CONCERNS
 
-The policy covers online safety, peer on peer abuse, and the specific safeguarding needs of vulnerable groups. It is read alongside the behaviour policy, the online safety policy and the information sharing procedure.`,
+Any concern relating to the safety, welfare or wellbeing of a pupil must be reported immediately to the Designated Safeguarding Lead (DSL) or, in their absence, a Deputy DSL. Staff must not investigate concerns themselves or delay reporting in order to gather additional evidence.
+
+Concerns may arise from direct disclosure, observation, changes in behaviour, attendance, presentation, wellbeing, information from parents or carers, or information received from external agencies. All concerns must be recorded factually on the Trust safeguarding recording system as soon as practicable on the same working day.
+
+ROLE OF THE DESIGNATED SAFEGUARDING LEAD
+
+The DSL has overall responsibility for coordinating safeguarding and child protection arrangements within the school. This includes reviewing concerns, assessing risk, determining appropriate action, maintaining safeguarding records, providing advice to staff, liaising with external agencies and ensuring that safeguarding information is transferred securely when a pupil moves school.
+
+The DSL will monitor patterns of concern, convene safeguarding discussions where appropriate and ensure that decisions are proportionate, evidence based and centred on the welfare of the pupil.
+
+ONLINE SAFETY
+
+The Trust recognises that safeguarding extends to pupils' online experiences. Staff should remain vigilant to concerns relating to online exploitation, cyberbullying, harmful online content, coercion, inappropriate contact, sharing of indecent images and the misuse of artificial intelligence or digital platforms.
+
+Online safety concerns must be treated with the same seriousness as concerns arising offline and should be reported through the normal safeguarding procedures.
+
+PEER-ON-PEER ABUSE
+
+The Trust recognises that children can abuse other children. This may include bullying, physical abuse, sexual harassment, sexual violence, coercive behaviour, initiation activities, prejudice based abuse, image sharing without consent and harmful online behaviour.
+
+Reports of peer-on-peer abuse will never be dismissed as normal behaviour or part of growing up. Allegations will be assessed individually, appropriate support will be offered to all affected pupils and suitable safeguarding action will be taken.
+
+THRESHOLDS AND REFERRAL
+
+The Trust applies a graduated safeguarding approach. Where concerns can be addressed through pastoral support or targeted early intervention, these measures will be implemented and reviewed. Where there is reasonable cause to suspect significant harm, or where statutory intervention may be required, the DSL will make a referral to the appropriate children's safeguarding service without delay.
+
+Where immediate danger is identified, emergency services will be contacted and appropriate protective action taken. The Trust will work collaboratively with partner agencies while maintaining accurate records of decisions, actions and outcomes.
+
+All safeguarding decisions will be reviewed regularly to ensure that support remains proportionate, timely and focused on achieving the best outcomes for the pupil.`,
   },
   {
     key: "online-policy",
