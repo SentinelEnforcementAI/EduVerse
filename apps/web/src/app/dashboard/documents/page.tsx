@@ -9,16 +9,29 @@ import { serverApi } from "@/trpc/server";
 
 import { Breadcrumbs } from "../shell/breadcrumbs";
 import { DocTypeIcon } from "../school/[schoolId]/documents/doc-icon";
+import { DocumentFilters } from "./document-filters";
+import { TrustDocumentSearch } from "./trust-document-search";
 
 // The trust-wide document repository (spec 5.9): every school's safeguarding
-// documents in one place for a director. Read across schools, each through its
-// own RLS context; a case document stays sealed by construction. Director-only.
-export default async function TrustDocumentsPage() {
+// documents in one place for a director, with conversational search and
+// filtering. Read across schools, each through its own RLS context; a case
+// document stays sealed by construction. Director-only.
+export default async function TrustDocumentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) =>
+    (Array.isArray(v) ? v[0] : v) || undefined;
   const api = await serverApi();
 
   let vault;
   try {
-    vault = await api.documents.trustVault();
+    vault = await api.documents.trustVault({
+      schoolId: one(sp.schoolId),
+      type: one(sp.type),
+    });
   } catch (error) {
     if (error instanceof TRPCError && error.code === "FORBIDDEN") {
       redirect("/dashboard");
@@ -38,9 +51,15 @@ export default async function TrustDocumentsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Documents</h1>
         <p className="mt-1 text-base text-muted-foreground">
           The trust safeguarding repository — every school&apos;s policies,
-          records, training and returns in one place. Each document is held in
-          its school&apos;s vault; open one to read it in full.
+          records, training and returns in one place. Search in plain language
+          or filter by school and type. Each document is held in its
+          school&apos;s vault; open one to read it in full.
         </p>
+      </div>
+
+      {/* Conversational search across every school */}
+      <div className="mt-6">
+        <TrustDocumentSearch />
       </div>
 
       {/* Headline coverage */}
@@ -131,14 +150,20 @@ export default async function TrustDocumentsPage() {
         </div>
       ) : null}
 
-      {/* Every document across the trust */}
-      <div className="mt-10 flex items-baseline justify-between">
-        <h2 className="text-xl font-semibold">All documents</h2>
-        <span className="text-sm text-muted-foreground">
-          {vault.documents.length}{" "}
-          {vault.documents.length === 1 ? "document" : "documents"}
-        </span>
-      </div>
+      {/* Every document across the trust, filterable by school and type */}
+      <h2 className="mt-10 text-xl font-semibold">All documents</h2>
+      <DocumentFilters
+        schools={vault.schools.map((s) => ({ id: s.id, name: s.name }))}
+        types={vault.types}
+        applied={vault.applied}
+        shown={vault.shown}
+        total={vault.total}
+      />
+      {vault.documents.length === 0 ? (
+        <Card className="mt-3 p-6 text-sm text-muted-foreground">
+          No documents match this filter.
+        </Card>
+      ) : (
       <ul className="mt-3 flex flex-col gap-2">
         {vault.documents.map((d) => (
           <li key={d.id}>
@@ -179,6 +204,7 @@ export default async function TrustDocumentsPage() {
           </li>
         ))}
       </ul>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ export type InsightSignal = {
 };
 
 export type InsightSchool = {
+  id: string;
   name: string;
   pupils: InsightPupil[];
   signals: InsightSignal[];
@@ -106,7 +107,7 @@ export function buildInsights(schools: InsightSchool[], now: Date) {
   const levelCount: Record<EscalationLevel, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
   const domainCount = new Map<string, { label: string; count: number }>();
   const volume = new Array<number>(TREND_MONTHS).fill(0);
-  const bySchool: { name: string; pupilsOnRoll: number; activeConcerns: number; per100: number }[] = [];
+  const bySchool: { id: string; name: string; pupilsOnRoll: number; activeConcerns: number; per100: number }[] = [];
 
   // Roll-wide and concern-pupil cohort tallies (distinct pupils).
   const rollCohort = new Map<string, number>();
@@ -161,6 +162,7 @@ export function buildInsights(schools: InsightSchool[], now: Date) {
     }
 
     bySchool.push({
+      id: school.id,
       name: school.name,
       pupilsOnRoll: school.pupils.length,
       activeConcerns: schoolActive,

@@ -213,11 +213,37 @@ describe("documents.trustVault", () => {
     expect(vault.types.find((t) => t.type === "Policy")!.count).toBe(2);
   });
 
+  it("filters the repository by school and type", async () => {
+    const caller = createCaller(await ctxFor(director));
+    const bySchool = await caller.documents.trustVault({ schoolId: tvB });
+    expect(bySchool.documents.every((d) => d.schoolId === tvB)).toBe(true);
+    expect(bySchool.shown).toBe(2);
+    expect(bySchool.total).toBe(3); // total is the pre-filter trust set
+    // Type facet comes from the unfiltered set, so it does not collapse.
+    expect(bySchool.types.find((t) => t.type === "Policy")!.count).toBe(2);
+
+    const training = await caller.documents.trustVault({ type: "Training" });
+    expect(training.documents).toHaveLength(1);
+    expect(training.documents[0]!.title).toBe("South Training Record");
+  });
+
+  it("runs conversational search across every school for a director", async () => {
+    const caller = createCaller(await ctxFor(director));
+    const result = await caller.documents.trustSearch({ query: "policy" });
+    expect(result.hits.length).toBeGreaterThanOrEqual(2);
+    // Each hit carries the school it belongs to.
+    expect(result.hits.every((h) => h.schoolName.length > 0)).toBe(true);
+    expect(result.synthesis).toContain("Found");
+  });
+
   it("denies a DSL the trust repository", async () => {
     const caller = createCaller(await ctxFor(tvDsl));
     await expect(caller.documents.trustVault()).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+    await expect(
+      caller.documents.trustSearch({ query: "policy" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 

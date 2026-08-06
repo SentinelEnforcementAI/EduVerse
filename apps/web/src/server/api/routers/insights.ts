@@ -73,7 +73,7 @@ export const insightsRouter = createTRPCRouter({
       ctx.tenancy.schools.map(async (s) => {
         const { db } = dbForSchool(ctx.tenancy, s.id);
         const { pupils, signals } = await schoolData(db);
-        return { name: s.name, pupils, signals };
+        return { id: s.id, name: s.name, pupils, signals };
       }),
     );
 

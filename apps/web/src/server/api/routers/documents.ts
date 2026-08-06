@@ -34,73 +34,153 @@ export const documentsRouter = createTRPCRouter({
   // safeguarding documents in one place. Read from each school through its own
   // RLS context and merged in application code — there is no cross-tenant query.
   // Director-only; a DSL uses the single-school vault above.
-  trustVault: tenancyProcedure.query(async ({ ctx }) => {
-    if (ctx.tenancy.mode !== "mat" || !ctx.tenancy.trustId) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "The trust repository is available to trust leadership only.",
-      });
-    }
-
-    const perSchool = await Promise.all(
-      ctx.tenancy.schools.map(async (s) => {
-        const { db } = dbForSchool(ctx.tenancy, s.id);
-        const docs = await db.document.findMany({
-          where: { scope: "ORG" },
-          orderBy: { docDate: "desc" },
-          take: 200,
+  trustVault: tenancyProcedure
+    .input(
+      z
+        .object({
+          schoolId: z.string().min(1).optional(),
+          type: z.string().min(1).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      if (ctx.tenancy.mode !== "mat" || !ctx.tenancy.trustId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "The trust repository is available to trust leadership only.",
         });
-        return { school: s, docs };
-      }),
-    );
+      }
+      const applied = { schoolId: input?.schoolId, type: input?.type };
 
-    const documents = perSchool
-      .flatMap(({ school, docs }) =>
-        docs.map((d) => ({
-          id: d.id,
+      const perSchool = await Promise.all(
+        ctx.tenancy.schools.map(async (s) => {
+          const { db } = dbForSchool(ctx.tenancy, s.id);
+          const docs = await db.document.findMany({
+            where: { scope: "ORG" },
+            orderBy: { docDate: "desc" },
+            take: 200,
+          });
+          return { school: s, docs };
+        }),
+      );
+
+      // The full trust set drives the facets and rollup; the display list is
+      // then filtered by the chosen school and document type.
+      const all = perSchool
+        .flatMap(({ school, docs }) =>
+          docs.map((d) => ({
+            id: d.id,
+            schoolId: school.id,
+            schoolName: school.name,
+            title: d.title,
+            type: d.type,
+            status: d.status,
+            docDate: d.docDate,
+            themes: d.themes,
+            summary: d.summary,
+          })),
+        )
+        .sort((a, b) => b.docDate.getTime() - a.docDate.getTime());
+
+      const documents = all.filter(
+        (d) =>
+          (!applied.schoolId || d.schoolId === applied.schoolId) &&
+          (!applied.type || d.type === applied.type),
+      );
+
+      // Per-school rollup: how many documents each school holds and its most
+      // recent filing — the director's first read of repository coverage.
+      const schools = perSchool.map(({ school, docs }) => ({
+        id: school.id,
+        name: school.name,
+        total: docs.length,
+        current: docs.filter((d) => d.status === "Current").length,
+        latest: docs[0]?.docDate ?? null,
+      }));
+
+      // Document-type facet across the trust (Policy, Record, Training, …), from
+      // the unfiltered set so the filter options never collapse to the current
+      // selection.
+      const typeCounts = new Map<string, number>();
+      for (const d of all) {
+        typeCounts.set(d.type, (typeCounts.get(d.type) ?? 0) + 1);
+      }
+      const types = [...typeCounts.entries()]
+        .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => b.count - a.count);
+
+      return {
+        totals: {
+          schools: schools.length,
+          documents: all.length,
+          current: all.filter((d) => d.status === "Current").length,
+        },
+        schools,
+        types,
+        documents,
+        total: all.length,
+        shown: documents.length,
+        applied,
+      };
+    }),
+
+  // Trust-wide contextual ("conversational") search over every school's
+  // repository, for a director. Matches what a document says and the themes it
+  // covers, not filenames, and explains each match. Read from each school
+  // through its own RLS context; the read is audited per school. Director-only.
+  trustSearch: tenancyProcedure
+    .input(z.object({ query: z.string().trim().min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.tenancy.mode !== "mat" || !ctx.tenancy.trustId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "The trust repository is available to trust leadership only.",
+        });
+      }
+
+      const perSchool = await Promise.all(
+        ctx.tenancy.schools.map(async (s) => {
+          const { db } = dbForSchool(ctx.tenancy, s.id);
+          const docs = await db.document.findMany({ take: 500 });
+          await recordAuditEvent(db, {
+            tenantId: s.id,
+            userId: ctx.session.user.id,
+            action: "documents.searched",
+            entityType: "document",
+            metadata: { query: input.query, scope: "trust" },
+          });
+          return { school: s, docs };
+        }),
+      );
+
+      const ranked = perSchool.flatMap(({ school, docs }) =>
+        rankDocuments(
+          docs.map((d) => ({
+            id: d.id,
+            title: d.title,
+            type: d.type,
+            status: d.status,
+            docDate: d.docDate,
+            themes: d.themes,
+            summary: d.summary,
+            content: d.content,
+            scope: d.scope,
+          })),
+          input.query,
+        ).map((hit) => ({
+          ...hit,
           schoolId: school.id,
           schoolName: school.name,
-          title: d.title,
-          type: d.type,
-          status: d.status,
-          docDate: d.docDate,
-          themes: d.themes,
-          summary: d.summary,
         })),
-      )
-      .sort((a, b) => b.docDate.getTime() - a.docDate.getTime());
+      );
+      const hits = ranked.sort((a, b) => b.score - a.score).slice(0, 50);
 
-    // Per-school rollup: how many documents each school holds and its most
-    // recent filing — the director's first read of repository coverage.
-    const schools = perSchool.map(({ school, docs }) => ({
-      id: school.id,
-      name: school.name,
-      total: docs.length,
-      current: docs.filter((d) => d.status === "Current").length,
-      latest: docs[0]?.docDate ?? null,
-    }));
-
-    // Document-type facet across the trust (Policy, Record, Training, …), so the
-    // repository can be read by kind, not just by school.
-    const typeCounts = new Map<string, number>();
-    for (const d of documents) {
-      typeCounts.set(d.type, (typeCounts.get(d.type) ?? 0) + 1);
-    }
-    const types = [...typeCounts.entries()]
-      .map(([type, count]) => ({ type, count }))
-      .sort((a, b) => b.count - a.count);
-
-    return {
-      totals: {
-        schools: schools.length,
-        documents: documents.length,
-        current: documents.filter((d) => d.status === "Current").length,
-      },
-      schools,
-      types,
-      documents,
-    };
-  }),
+      return {
+        query: input.query,
+        synthesis: synthesise(input.query, hits),
+        hits,
+      };
+    }),
 
   // The org vault (spec 5.9): policies, records and generated documents.
   vault: tenancyProcedure

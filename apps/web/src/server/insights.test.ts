@@ -48,6 +48,7 @@ describe("domainOfRule", () => {
 describe("buildInsights", () => {
   const schools: InsightSchool[] = [
     {
+      id: "s-downlands",
       name: "Downlands",
       pupils: [
         pupil("p1", 9, { pupilPremium: true, senStatus: "EHCP" }),
@@ -63,6 +64,7 @@ describe("buildInsights", () => {
       ],
     },
     {
+      id: "s-patcham",
       name: "Patcham",
       pupils: [pupil("p5", 9, { pupilPremium: true }), pupil("p6", 7)],
       signals: [sig("p5", "OPEN", 4, false, "demo-hero")], // active, level 3, cross-domain

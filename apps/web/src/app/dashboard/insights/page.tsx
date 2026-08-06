@@ -40,21 +40,42 @@ export default async function InsightsPage() {
 
   const t = insights.totals;
 
+  // Every figure drills through to the concerns behind it: the trust concerns
+  // list already filters by school, domain, level, status and cohort, so we
+  // just build the matching URL.
+  const triage = (params: Record<string, string> = {}, key: "active" | "awaiting" = "active") => {
+    const qs = new URLSearchParams(params).toString();
+    return `/dashboard/trust/triage/${key}${qs ? `?${qs}` : ""}`;
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
       <p className="mt-1 text-base text-muted-foreground">
         The trust safeguarding picture — trends, the escalation-level mix, and
-        which cohorts are carrying concern. Real data across every school.
+        which cohorts are carrying concern. Real data across every school. Select
+        any figure to open the concerns behind it.
       </p>
 
       {/* Headline figures */}
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label="Schools" value={t.schools} />
-        <StatTile label="Pupils on roll" value={t.pupilsOnRoll.toLocaleString("en-GB")} />
-        <StatTile label="Active concerns" value={t.activeConcerns} />
-        <StatTile label="Awaiting decision" value={t.awaitingDecision} />
-        <StatTile label="Escalated" value={t.escalated} />
+        <StatTile label="Schools" value={t.schools} href="/dashboard/schools" />
+        <StatTile
+          label="Pupils on roll"
+          value={t.pupilsOnRoll.toLocaleString("en-GB")}
+          href="/dashboard/schools"
+        />
+        <StatTile label="Active concerns" value={t.activeConcerns} href={triage()} />
+        <StatTile
+          label="Awaiting decision"
+          value={t.awaitingDecision}
+          href={triage({}, "awaiting")}
+        />
+        <StatTile
+          label="Escalated"
+          value={t.escalated}
+          href={triage({ status: "ESCALATED" })}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -79,7 +100,12 @@ export default async function InsightsPage() {
             Where the live caseload sits. A level, never a score.
           </p>
           <div className="mt-4">
-            <LevelDonut mix={insights.levelMix} />
+            <LevelDonut
+              mix={insights.levelMix.map((m) => ({
+                ...m,
+                href: triage({ level: String(m.level) }),
+              }))}
+            />
           </div>
         </Card>
 
@@ -92,7 +118,11 @@ export default async function InsightsPage() {
           <div className="mt-4">
             {insights.domainMix.length ? (
               <BarList
-                rows={insights.domainMix.map((d) => ({ label: d.label, value: d.count }))}
+                rows={insights.domainMix.map((d) => ({
+                  label: d.label,
+                  value: d.count,
+                  href: triage({ domain: d.key }),
+                }))}
               />
             ) : (
               <p className="text-sm text-muted-foreground">No active concerns.</p>
@@ -107,7 +137,14 @@ export default async function InsightsPage() {
             How the caseload has been worked. Watch never closes a case.
           </p>
           <div className="mt-4">
-            <Outcomes outcomes={insights.outcomes} />
+            <Outcomes
+              outcomes={insights.outcomes}
+              hrefs={{
+                open: triage({}, "awaiting"),
+                confirmed: triage({ status: "CONFIRMED" }),
+                escalated: triage({ status: "ESCALATED" }),
+              }}
+            />
           </div>
         </Card>
 
@@ -126,6 +163,7 @@ export default async function InsightsPage() {
                 label: c.label,
                 concernShare: c.concernShare,
                 rollShare: c.rollShare,
+                href: triage({ cohort: c.key }),
               }))}
             />
           </div>
@@ -144,6 +182,7 @@ export default async function InsightsPage() {
                 label: s.name,
                 value: s.per100,
                 note: `${s.activeConcerns} of ${s.pupilsOnRoll}`,
+                href: triage({ schoolId: s.id }),
               }))}
               unit="per 100"
             />

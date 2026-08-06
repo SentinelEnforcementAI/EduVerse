@@ -1,28 +1,46 @@
+import Link from "next/link";
+
 import { Card } from "@/components/ui/card";
 
 // Static, server-rendered charts for the trust insights page. In the spirit of
 // the app's "honest sparkline": every series is real data, every value is
 // directly labelled or legended (identity is never colour-alone), magnitude
 // uses a single hue (cobalt), and the escalation scale uses the level palette.
+// Where a figure has an `href`, it drills through to the concerns it counts.
 
 export function StatTile({
   label,
   value,
   sub,
+  href,
 }: {
   label: string;
   value: string | number;
   sub?: string;
+  href?: string;
 }) {
-  return (
-    <Card className="p-4">
+  const inner = (
+    <>
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
       {sub ? <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div> : null}
-    </Card>
+    </>
   );
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Card className="h-full p-4 transition-colors group-hover:border-cobalt">
+          {inner}
+        </Card>
+      </Link>
+    );
+  }
+  return <Card className="p-4">{inner}</Card>;
 }
 
 // Concern volume over time — a trend is a line, not a column of bars. A cobalt
@@ -90,35 +108,52 @@ export function AreaTrend({ labels, values }: { labels: string[]; values: number
   );
 }
 
-// A horizontal magnitude list — one hue, length encodes the count.
+// A horizontal magnitude list — one hue, length encodes the count. A row with
+// an `href` becomes a link to the concerns behind it.
 export function BarList({
   rows,
   unit,
 }: {
-  rows: { label: string; value: number; note?: string }[];
+  rows: { label: string; value: number; note?: string; href?: string }[];
   unit?: string;
 }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <ul className="space-y-2.5">
-      {rows.map((r) => (
-        <li key={r.label}>
-          <div className="flex items-baseline justify-between gap-2 text-sm">
-            <span className="truncate">{r.label}</span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">
-              {r.value}
-              {unit ? ` ${unit}` : ""}
-              {r.note ? ` · ${r.note}` : ""}
-            </span>
-          </div>
-          <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-paper">
-            <div
-              className="h-full rounded-full bg-cobalt"
-              style={{ width: `${(r.value / max) * 100}%` }}
-            />
-          </div>
-        </li>
-      ))}
+      {rows.map((r) => {
+        const body = (
+          <>
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="truncate group-hover:text-cobalt">{r.label}</span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {r.value}
+                {unit ? ` ${unit}` : ""}
+                {r.note ? ` · ${r.note}` : ""}
+              </span>
+            </div>
+            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-paper">
+              <div
+                className="h-full rounded-full bg-cobalt"
+                style={{ width: `${(r.value / max) * 100}%` }}
+              />
+            </div>
+          </>
+        );
+        return (
+          <li key={r.label}>
+            {r.href ? (
+              <Link
+                href={r.href}
+                className="group block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {body}
+              </Link>
+            ) : (
+              body
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -134,7 +169,11 @@ const LEVEL_STYLE: Record<number, { bg: string; label: string }> = {
 // palette with the caseload total at its centre, and a labelled legend beside
 // it (identity is never colour-alone). Part-to-whole, so a ring reads at a
 // glance where a stacked bar only reads on inspection.
-export function LevelDonut({ mix }: { mix: { level: number; count: number }[] }) {
+export function LevelDonut({
+  mix,
+}: {
+  mix: { level: number; count: number; href?: string }[];
+}) {
   const total = mix.reduce((n, m) => n + m.count, 0);
   const r = 42;
   const circumference = 2 * Math.PI * r;
@@ -186,17 +225,35 @@ export function LevelDonut({ mix }: { mix: { level: number; count: number }[] })
         </div>
       </div>
       <ul className="grid w-full grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-1">
-        {mix.map((m) => (
-          <li key={m.level} className="flex items-center gap-2 text-sm">
-            <span
-              aria-hidden
-              className="size-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: LEVEL_STYLE[m.level]!.bg }}
-            />
-            <span className="text-muted-foreground">{LEVEL_STYLE[m.level]!.label}</span>
-            <span className="ml-auto tabular-nums font-medium">{m.count}</span>
-          </li>
-        ))}
+        {mix.map((m) => {
+          const row = (
+            <>
+              <span
+                aria-hidden
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: LEVEL_STYLE[m.level]!.bg }}
+              />
+              <span className="text-muted-foreground group-hover:text-cobalt">
+                {LEVEL_STYLE[m.level]!.label}
+              </span>
+              <span className="ml-auto tabular-nums font-medium">{m.count}</span>
+            </>
+          );
+          return (
+            <li key={m.level}>
+              {m.href ? (
+                <Link
+                  href={m.href}
+                  className="group flex items-center gap-2 rounded-md text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {row}
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">{row}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -212,8 +269,10 @@ const OUTCOME_STYLE: { key: string; label: string; bg: string }[] = [
 
 export function Outcomes({
   outcomes,
+  hrefs,
 }: {
   outcomes: { open: number; confirmed: number; escalated: number; dismissed: number };
+  hrefs?: Partial<Record<"open" | "confirmed" | "escalated" | "dismissed", string>>;
 }) {
   const total =
     outcomes.open + outcomes.confirmed + outcomes.escalated + outcomes.dismissed || 1;
@@ -232,19 +291,38 @@ export function Outcomes({
         })}
       </div>
       <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {OUTCOME_STYLE.map((o) => (
-          <li key={o.key} className="flex items-center gap-2 text-sm">
-            <span
-              aria-hidden
-              className="size-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: o.bg }}
-            />
-            <span className="text-muted-foreground">{o.label}</span>
-            <span className="tabular-nums font-medium">
-              {outcomes[o.key as keyof typeof outcomes]}
-            </span>
-          </li>
-        ))}
+        {OUTCOME_STYLE.map((o) => {
+          const href = hrefs?.[o.key as keyof typeof outcomes];
+          const row = (
+            <>
+              <span
+                aria-hidden
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: o.bg }}
+              />
+              <span className="text-muted-foreground group-hover:text-cobalt">
+                {o.label}
+              </span>
+              <span className="tabular-nums font-medium">
+                {outcomes[o.key as keyof typeof outcomes]}
+              </span>
+            </>
+          );
+          return (
+            <li key={o.key}>
+              {href ? (
+                <Link
+                  href={href}
+                  className="group flex items-center gap-2 rounded-md text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {row}
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">{row}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -257,7 +335,7 @@ export function Outcomes({
 export function CohortLens({
   rows,
 }: {
-  rows: { label: string; concernShare: number; rollShare: number }[];
+  rows: { label: string; concernShare: number; rollShare: number; href?: string }[];
 }) {
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   return (
@@ -265,10 +343,10 @@ export function CohortLens({
       <ul className="space-y-3">
         {rows.map((r) => {
           const over = r.concernShare > r.rollShare + 0.02;
-          return (
-            <li key={r.label}>
+          const body = (
+            <>
               <div className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="truncate">{r.label}</span>
+                <span className="truncate group-hover:text-cobalt">{r.label}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
                   {pct(r.concernShare)} of concerns · {pct(r.rollShare)} of roll
                 </span>
@@ -284,6 +362,20 @@ export function CohortLens({
                   style={{ width: `${r.concernShare * 100}%`, opacity: 0.85 }}
                 />
               </div>
+            </>
+          );
+          return (
+            <li key={r.label}>
+              {r.href ? (
+                <Link
+                  href={r.href}
+                  className="group block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {body}
+                </Link>
+              ) : (
+                body
+              )}
             </li>
           );
         })}
