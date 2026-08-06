@@ -1,14 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  ArrowRight,
-  Building2,
-  ChevronRight,
-  Flag,
-  Network,
-  Timer,
-  Users,
-} from "lucide-react";
+import { ArrowRight, Building2, Flag, Timer, Users } from "lucide-react";
 
 import { TRPCError } from "@trpc/server";
 
@@ -17,6 +9,7 @@ import { buildTrustTermlyReport } from "@/server/reports/termly";
 import { serverApi } from "@/trpc/server";
 
 import { CaseloadBar } from "../shell/caseload-bar";
+import { CrossSchoolPatterns } from "../shell/cross-school-patterns";
 import { KpiCard } from "../shell/kpi";
 import { ReportPanel } from "../shell/report-panel";
 import { SchoolCard } from "../shell/school-card";
@@ -171,34 +164,13 @@ export default async function TrustOverviewPage() {
             </Link>
           </div>
           <p className="mt-1 text-base text-muted-foreground">
-            Concerns crossing school boundaries this period. What looks local at
-            one school reads as a cohort pattern across the trust.
+            Signals that appear isolated within one school but become significant
+            across the trust.
           </p>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {cohort.patterns.map((p) => (
-              <Link
-                key={p.key}
-                href={`/dashboard/trust/cohort/${p.key}`}
-                className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Card className="h-full p-5 card-interactive">
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-paper text-ink-muted">
-                    <Network className="size-[18px]" aria-hidden />
-                  </span>
-                  <div className="mt-3 text-base font-semibold leading-snug">
-                    {p.title}
-                  </div>
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    {p.detail}
-                  </div>
-                  <div className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-cobalt">
-                    Investigate
-                    <ChevronRight className="size-4" aria-hidden />
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
+          <CrossSchoolPatterns
+            patterns={cohort.patterns}
+            basePath="/dashboard/trust/cohort"
+          />
         </>
       ) : null}
     </div>

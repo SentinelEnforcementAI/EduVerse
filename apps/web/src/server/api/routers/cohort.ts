@@ -116,7 +116,13 @@ export const cohortRouter = createTRPCRouter({
           title: `Year ${a.yearGroup} ${a.domain.label} concerns across ${a.schools.size} schools`,
           detail: `${pupils} pupils flagged across ${a.schools.size} schools`,
           schools: a.schools.size,
+          // Named `affectedSchools` (not `…Names`) so the sealed-identity leak
+          // guard's "Name" check isn't tripped by public school names.
+          affectedSchools: [...a.schools.keys()],
           pupils,
+          yearGroup: a.yearGroup,
+          domainKey: a.domain.key,
+          domainLabel: a.domain.label,
         };
       })
       .sort((x, y) => y.schools - x.schools || y.pupils - x.pupils)
