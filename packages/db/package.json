@@ -22,7 +22,9 @@
     "db:seed:demo": "dotenv -e ../../.env -- tsx scripts/seed-demo.ts",
     "db:seed:demo:prod": "tsx scripts/seed-demo.ts",
     "db:sandbox:admin": "dotenv -e ../../.env -- tsx scripts/sandbox-admin.ts",
-    "db:sandbox:admin:prod": "tsx scripts/sandbox-admin.ts"
+    "db:sandbox:admin:prod": "tsx scripts/sandbox-admin.ts",
+    "db:demo:fixups": "dotenv -e ../../.env -- tsx scripts/demo-fixups.ts",
+    "db:demo:fixups:prod": "tsx scripts/demo-fixups.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2"
