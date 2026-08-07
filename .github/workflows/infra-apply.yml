@@ -1,0 +1,108 @@
+# Terraform-only apply (eu-west-2). Applies pending infrastructure changes —
+# IAM policies, alarms, task-definition tweaks — WITHOUT rebuilding images,
+# running migrations, or seeding data. The surgical counterpart to Bootstrap
+# (which runs the whole runbook, including a demo reseed) and Deploy (which
+# ships app images but never touches Terraform).
+#
+# The app's two required variables (app_url, email_from) are recovered from the
+# live web task definition, so a re-apply is a no-op on everything except the
+# real diff. Optionally scope the run to a single resource with `target`.
+#
+# Requires repository secrets AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY holding
+# a key with Terraform/IAM permissions (the bootstrap key, or an equivalent).
+name: Infra apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Optional Terraform resource address to scope the apply (e.g. aws_iam_role_policy.web_task_permissions). Leave blank to apply all pending changes."
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: infra-apply-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve Terraform state bucket
+        id: state
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "bucket=$PROJECT-tfstate-$ACCOUNT" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ steps.state.outputs.bucket }}" \
+            -backend-config="key=production.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="use_lockfile=true"
+
+      - name: Recover current app variables from the live web task definition
+        id: vars
+        run: |
+          TD="$PROJECT-web"
+          APP_URL=$(aws ecs describe-task-definition --task-definition "$TD" \
+            --query "taskDefinition.containerDefinitions[0].environment[?name=='APP_URL'].value | [0]" \
+            --output text)
+          EMAIL_FROM=$(aws ecs describe-task-definition --task-definition "$TD" \
+            --query "taskDefinition.containerDefinitions[0].environment[?name=='EMAIL_FROM'].value | [0]" \
+            --output text)
+          if [ -z "$APP_URL" ] || [ "$APP_URL" = "None" ] || [ -z "$EMAIL_FROM" ] || [ "$EMAIL_FROM" = "None" ]; then
+            echo "Could not recover app_url / email_from from task definition $TD." >&2
+            echo "Run the Bootstrap workflow first, or set these values manually." >&2
+            exit 1
+          fi
+          echo "Recovered app_url=$APP_URL"
+          echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
+          # email_from can contain spaces/quotes; pass it through the env instead.
+          {
+            echo "email_from<<EOF"
+            echo "$EMAIL_FROM"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Terraform apply
+        working-directory: infra/terraform
+        env:
+          TF_VAR_app_url: ${{ steps.vars.outputs.app_url }}
+          TF_VAR_email_from: ${{ steps.vars.outputs.email_from }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          TARGET_ARG=""
+          if [ -n "$TARGET" ]; then
+            TARGET_ARG="-target=$TARGET"
+            echo "Scoping apply to: $TARGET"
+          fi
+          terraform apply -auto-approve $TARGET_ARG
