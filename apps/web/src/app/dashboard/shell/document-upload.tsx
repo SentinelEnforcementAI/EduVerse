@@ -255,8 +255,9 @@ export function DocumentUpload({
                   <p className="mt-1 text-xs text-risk">{fileError}</p>
                 ) : null}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  PDFs and Office files are supported in production storage; the
-                  demo accepts images up to 3MB.
+                  Images up to 3MB. Text in a PNG or JPEG is read automatically
+                  (OCR) so it becomes searchable; check it against the original.
+                  PDF and Office support lands with production file storage.
                 </p>
               </div>
 

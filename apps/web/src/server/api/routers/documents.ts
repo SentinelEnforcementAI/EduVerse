@@ -14,6 +14,7 @@ import {
   SEARCH_SYNTHESIS_PROMPT,
 } from "@/server/advisory/enhance";
 import { recordAuditEvent } from "@/server/audit";
+import { composeContent, extractTextFromImage } from "@/server/documents/ocr";
 import { rankDocuments, synthesise } from "@/server/documents/search";
 import { getNarrativeModel } from "@/server/narrative/model-provider";
 
@@ -454,13 +455,21 @@ Every read and change against a child's record is logged in the audit trail. Pup
         pupilId = signal.pupilId;
       }
 
+      // OCR any uploaded image so its text becomes searchable and readable.
+      // Runs on Textract in eu-west-2 (document bytes stay in UK infra); returns
+      // null and falls back to filing the image if OCR is unavailable.
+      const ocrText = input.fileDataUrl
+        ? await extractTextFromImage(input.fileDataUrl)
+        : null;
+      const composed = composeContent(input.note, ocrText);
+
       const ukDateShort = (d: Date) => d.toLocaleDateString("en-GB");
+      const where = input.scope === "ORG" ? "repository" : "case file";
       const summary =
-        input.note?.replace(/\s+/g, " ").slice(0, 200) ||
-        `Uploaded to the ${input.scope === "ORG" ? "repository" : "case file"} on ${ukDateShort(new Date())}.`;
+        composed.summary || `Uploaded to the ${where} on ${ukDateShort(new Date())}.`;
       const content =
-        input.note?.trim() ||
-        `Document uploaded to the ${input.scope === "ORG" ? "repository" : "case file"}${input.fileName ? ` (${input.fileName})` : ""}. The image is held in Sentinel Watch; the original file is available on request.`;
+        composed.content ||
+        `Document uploaded to the ${where}${input.fileName ? ` (${input.fileName})` : ""}. The image is held in Sentinel Watch; the original file is available on request.`;
 
       const doc = await db.document.create({
         data: {
@@ -472,7 +481,7 @@ Every read and change against a child's record is logged in the audit trail. Pup
           type: input.type,
           docDate: new Date(),
           status: "Filed",
-          themes: ["uploaded"],
+          themes: composed.ocrApplied ? ["uploaded", "ocr"] : ["uploaded"],
           summary,
           content,
           imageDataUrl: input.fileDataUrl ?? null,
@@ -491,8 +500,9 @@ Every read and change against a child's record is logged in the audit trail. Pup
           scope: input.scope,
           type: input.type,
           hasFile: Boolean(input.fileDataUrl),
+          ocr: composed.ocrApplied,
         },
       });
-      return { id: doc.id };
+      return { id: doc.id, ocrApplied: composed.ocrApplied };
     }),
 });
