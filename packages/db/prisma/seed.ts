@@ -248,6 +248,25 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedSumma
     // Level 4 disclosure that drives the reveal and referral demo).
     await seedHeroCases(tenant.id, { flagship: school.flagship });
 
+    // seedHeroCases suffixes the flagship pupil's UPN with "-0421" so its
+    // sealed reference reads "Pupil 0421". If that pupil is one of the embedded
+    // risk pupils, its UPN in the ground-truth map is now stale (the engine
+    // still flags the pupil — under its new UPN). Reflect the rename so callers
+    // match by the pupil's actual, current UPN. The seeded data is unchanged.
+    if (school.flagship) {
+      const renamed = await systemDb.pupil.findMany({
+        where: { tenantId: tenant.id, upn: { endsWith: "-0421" } },
+        select: { upn: true },
+      });
+      for (const { upn } of renamed) {
+        const base = upn.replace(/-0421$/, "");
+        for (const pattern of Object.keys(riskPupils) as RiskPattern[]) {
+          const idx = riskPupils[pattern].indexOf(base);
+          if (idx !== -1) riskPupils[pattern][idx] = upn;
+        }
+      }
+    }
+
     summary.schools.push({
       slug: school.slug,
       name: school.name,
