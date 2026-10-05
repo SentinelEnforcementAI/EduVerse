@@ -1,0 +1,119 @@
+# Destroy the eu-west-2 infrastructure so it stops incurring charges. The
+# reverse of Bootstrap. Guarded by a typed confirmation, and handles the two
+# things a plain `terraform destroy` trips over:
+#   1. RDS deletion_protection = true  → disabled first (via the API).
+#   2. ECR repositories still hold images → force-deleted first.
+#
+# RDS is configured with skip_final_snapshot = false, so destroy takes a final
+# snapshot ("sentinel-watch-db-final") — a cheap recovery point, NOT a running
+# cost. Delete that snapshot in the RDS console if you want zero spend.
+#
+# NOT destroyed (create tiny or no cost, and are needed to re-bootstrap):
+#   - the S3 Terraform state bucket
+#   - the final RDS snapshot
+# Re-provision any time with the Bootstrap workflow.
+#
+# Requires repository secrets AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY with
+# permission to destroy (the bootstrap key).
+name: Destroy infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DESTROY to confirm tearing down all eu-west-2 infrastructure'
+        required: true
+        type: string
+
+concurrency:
+  group: infra-destroy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: sentinel-watch
+
+permissions:
+  contents: read
+
+jobs:
+  destroy:
+    name: Terraform destroy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "DESTROY" ]; then
+            echo "Confirmation not given (expected DESTROY). Aborting." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve Terraform state bucket
+        id: state
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "bucket=$PROJECT-tfstate-$ACCOUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Disable RDS deletion protection
+        run: |
+          if aws rds describe-db-instances --db-instance-identifier "$PROJECT-db" >/dev/null 2>&1; then
+            aws rds modify-db-instance --db-instance-identifier "$PROJECT-db" \
+              --no-deletion-protection --apply-immediately >/dev/null
+            aws rds wait db-instance-available --db-instance-identifier "$PROJECT-db" || true
+            echo "Deletion protection disabled."
+          else
+            echo "No RDS instance $PROJECT-db — nothing to disable."
+          fi
+
+      - name: Force-delete ECR repositories (they hold images)
+        run: |
+          for repo in "$PROJECT/web" "$PROJECT/worker"; do
+            if aws ecr describe-repositories --repository-names "$repo" >/dev/null 2>&1; then
+              aws ecr delete-repository --repository-name "$repo" --force >/dev/null
+              echo "Deleted ECR repo $repo."
+            else
+              echo "ECR repo $repo already gone."
+            fi
+          done
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ steps.state.outputs.bucket }}" \
+            -backend-config="key=production.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform destroy
+        working-directory: infra/terraform
+        run: |
+          # Variable values are irrelevant when destroying, but Terraform still
+          # requires the two that have no default. The ECR repos were deleted
+          # out of band above; Terraform treats them as already gone.
+          terraform destroy -auto-approve \
+            -var "app_url=http://destroyed.invalid" \
+            -var 'email_from=Sentinel Watch <noreply@destroyed.invalid>'
+
+      - name: Done
+        run: |
+          echo "Infrastructure destroyed. Ongoing compute/network charges stop now."
+          echo "Kept: the S3 state bucket and the final RDS snapshot (sentinel-watch-db-final)."
+          echo "Delete the snapshot in the RDS console for zero spend; re-provision with Bootstrap."
